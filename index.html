@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>呼吸訓練遊戲廳</title>
 <style>
   :root{
@@ -10,16 +10,17 @@
     --gold:#ffd24a; --gold-dk:#b8862a; --red:#e6402f; --red-br:#ff6a52;
     --cream:#fff3df; --green:#7fe08d; --blue:#5fb0ff; --dim:#e0b58f;
   }
-  *{box-sizing:border-box;}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--cream);
-    font-family:"Microsoft JhengHei UI","PingFang TC","Noto Sans TC",sans-serif;overflow:hidden;}
-  #app{display:flex;flex-direction:column;height:100vh;}
+    font-family:"Microsoft JhengHei UI","PingFang TC","Noto Sans TC",sans-serif;
+    overflow:hidden;overscroll-behavior:none;touch-action:none;}
+  #app{display:flex;flex-direction:column;height:100vh;height:100dvh;}
   .bar{background:var(--header);display:flex;align-items:center;gap:8px;padding:8px 12px;flex-wrap:wrap;}
   button{font-family:inherit;border:none;border-radius:10px;cursor:pointer;font-weight:700;
     transition:transform .06s ease, filter .15s ease;}
   button:active{transform:translateY(1px) scale(.99);}
   .btn-gold{background:var(--gold);color:#3a0a10;} .btn-dk{background:var(--panel);color:var(--cream);}
-  .btn-red{background:var(--red);color:var(--cream);}
+  .btn-red{background:var(--red);color:var(--cream);} .btn-blue{background:var(--blue);color:#0a1a3a;}
   .btn-md{font-size:15px;padding:9px 16px;} .btn-lg{font-size:20px;padding:13px 24px;}
   input{font-family:inherit;background:var(--panel);color:var(--cream);border:none;border-radius:8px;
     padding:8px 10px;font-size:15px;outline:none;}
@@ -30,14 +31,13 @@
   canvas{width:100%;height:100%;display:block;}
   /* 主選單 */
   #hub{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;gap:22px;padding:24px;background:var(--bg);}
+    justify-content:center;gap:22px;padding:24px;background:var(--bg);overflow-y:auto;}
   #hub h1{font-size:min(46px,7vw);color:var(--gold);margin:0;}
   #hub p{color:var(--dim);margin:0 0 6px;font-size:16px;}
-  .cards{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;max-width:1000px;}
+  .cards{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;max-width:1000px;width:100%;}
   .card{width:280px;min-height:220px;border-radius:18px;padding:22px;cursor:pointer;
     display:flex;flex-direction:column;gap:10px;color:#2a0a10;
     box-shadow:0 6px 0 rgba(0,0,0,.25);transition:transform .1s ease, box-shadow .1s ease;}
-  .card:hover{transform:translateY(-4px);box-shadow:0 10px 0 rgba(0,0,0,.25);}
   .card:active{transform:translateY(2px);box-shadow:0 3px 0 rgba(0,0,0,.25);}
   .card .big{font-size:30px;font-weight:800;}
   .card .tag{font-size:14px;font-weight:800;opacity:.7;}
@@ -47,16 +47,43 @@
   .c3{background:linear-gradient(160deg,#ffb0b0,#ff7a6a);}
   #bottom{margin-top:auto;}
   #bottom.hide{display:none;}
-  /* 上傳狀態小提示 */
   #syncStatus{font-size:12px;color:var(--dim);opacity:.85;}
   #syncStatus.err{color:var(--red-br);}
+
+  /* 觸控吸/吐按鈕（手機試玩用；沒接裝置時出現）*/
+  #touchpad{position:absolute;left:0;right:0;bottom:0;display:none;
+    padding:12px;gap:12px;justify-content:center;pointer-events:none;}
+  #touchpad.show{display:flex;}
+  .tbtn{pointer-events:auto;flex:1;max-width:220px;height:74px;border-radius:16px;
+    font-size:20px;font-weight:800;color:#2a0a10;box-shadow:0 5px 0 rgba(0,0,0,.3);
+    display:flex;align-items:center;justify-content:center;user-select:none;touch-action:none;}
+  .tbtn:active{transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.3);}
+  #tInhale{background:linear-gradient(160deg,#ffd24a,#ffb03a);}
+  #tExhale{background:linear-gradient(160deg,#ffb0b0,#ff7a6a);}
+
+  /* 手機直式：卡片改為單欄堆疊、頂列緊湊 */
+  @media (max-width:720px){
+    .bar.top{gap:6px;padding:7px 10px;}
+    .bar.top label{display:none;}
+    #name{width:88px;}
+    #hub{gap:14px;padding:16px;justify-content:flex-start;padding-top:24px;}
+    #hub p{font-size:14px;}
+    #hub h1{font-size:24px;}
+    .cards{gap:12px;flex-direction:column;align-items:center;}
+    .card{width:100%;max-width:420px;min-height:0;padding:16px 18px;
+      box-shadow:0 4px 0 rgba(0,0,0,.25);}
+    .card .big{font-size:22px;}
+    .card .desc{font-size:14px;line-height:1.45;}
+    .btn-lg{font-size:18px;padding:12px 20px;}
+  }
 </style>
 </head>
 <body>
 <div id="app">
   <div class="bar top">
-    <button id="connectBtn" class="btn-gold btn-md">連接裝置</button>
-    <span id="status">未連線 · 可用「↑ ↓ 方向鍵」試玩</span>
+    <button id="bleBtn" class="btn-blue btn-md">藍芽連線</button>
+    <button id="usbBtn" class="btn-gold btn-md">USB 連線</button>
+    <span id="status">未連線</span>
     <span class="spacer"></span>
     <span id="syncStatus"></span>
     <label>姓名 / 編號</label>
@@ -86,6 +113,12 @@
         </div>
       </div>
     </div>
+
+    <!-- 觸控試玩按鈕（手機沒接裝置時可用手指玩）-->
+    <div id="touchpad">
+      <div class="tbtn" id="tInhale">吸氣 ▲</div>
+      <div class="tbtn" id="tExhale">吐氣 ▼</div>
+    </div>
   </div>
 
   <div id="bottom" class="bar hide">
@@ -104,97 +137,123 @@ import taiko from "./game_taiko.js";
 const GAMES = { angrybird, balloon, taiko };
 const ONSET = 12;
 
-// ---------- 顏色(給遊戲用) ----------
 const COLORS = { bg:"#43111a", panel:"#5c1a26", header:"#370d14", track:"#2c0910",
   gold:"#ffd24a", goldDk:"#b8862a", red:"#e6402f", redBr:"#ff6a52",
   cream:"#fff3df", green:"#7fe08d", blue:"#5fb0ff", dim:"#e0b58f" };
 
-// ================= 雲端上傳(新增) =================
-// 每次呼叫 store.set(...) 時，除了照原本寫入 localStorage，
-// 也會背景把這筆事件 POST 給後端 /api/log(Vercel Serverless Function)。
-// 上傳失敗(離線、伺服器錯誤等)不影響遊戲本身 —— 全部 fire-and-forget，
-// 並在畫面右上角顯示簡單的同步狀態提示。
+// ================= 雲端上傳 =================
 const LOG_ENDPOINT = "/api/log";
-
-function setSyncStatus(text, isErr=false){
-  syncStatusEl.textContent = text;
-  syncStatusEl.className = isErr ? "err" : "";
-}
-
+function setSyncStatus(text, isErr=false){ syncStatusEl.textContent = text; syncStatusEl.className = isErr ? "err" : ""; }
 async function uploadLog(payload){
   try{
-    const res = await fetch(LOG_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: api.name(), ts: Date.now(), ...payload }),
-    });
+    const res = await fetch(LOG_ENDPOINT, { method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ name: api.name(), ts: Date.now(), ...payload }) });
     if(!res.ok) throw new Error("HTTP " + res.status);
     setSyncStatus("☁ 已同步");
-  }catch(err){
-    console.warn("上傳失敗(不影響遊戲):", err);
-    setSyncStatus("☁ 同步失敗，稍後重試", true);
-  }
+  }catch(err){ console.warn("上傳失敗(不影響遊戲):", err); setSyncStatus("☁ 同步失敗，稍後重試", true); }
 }
 
-// ---------- 儲存(本機 localStorage,失敗則記憶體 + 背景上傳雲端) ----------
+// ---------- 儲存 ----------
 const mem = {};
 const store = {
   get(k, def=null){ try{ const v=localStorage.getItem("bt_"+k); return v==null?def:JSON.parse(v); }
     catch{ return (k in mem)?mem[k]:def; } },
-  set(k, v){
-    try{ localStorage.setItem("bt_"+k, JSON.stringify(v)); }catch{ mem[k]=v; }
-    // 背景上傳:把這次寫入的 key/value 當成一筆「成績事件」送到後端
-    uploadLog({ type:"score", game: current ? currentId : null, key:k, value:v });
-  },
+  set(k, v){ try{ localStorage.setItem("bt_"+k, JSON.stringify(v)); }catch{ mem[k]=v; }
+    uploadLog({ type:"score", game: current ? currentId : null, key:k, value:v }); },
 };
 
-// ---------- 裝置連線(Web Serial;裝置只送 FFT) ----------
-let port=null, reader=null, keepReading=false, lastFFT=null, lastTs=0;
-async function connect(){
-  if(port){ await disconnect(); return; }
-  if(!("serial" in navigator)){ setStatus("此瀏覽器不支援 Web Serial,請用 Chrome/Edge","warn"); return; }
+// ================= 輸入來源（USB serial / BLE / 觸控）=================
+// 三種來源都把最新的 FFT 存進 lastFFT，下游 analyze() 完全一致。
+let lastFFT=null, lastTs=0;
+function onFFTLine(ln){ const b=parseFFTLine(ln); if(b){ lastFFT=b; lastTs=performance.now()/1000; } }
+
+// ---- USB (Web Serial) ----
+let port=null, reader=null, keepReadingSerial=false;
+async function connectSerial(){
+  if(port){ await disconnectSerial(); return; }
+  if(!("serial" in navigator)){ setStatus("此裝置不支援 USB(Web Serial)，手機請改用藍芽","warn"); return; }
   try{ port=await navigator.serial.requestPort(); await port.open({baudRate:115200}); }
-  catch{ setStatus("未選擇裝置 · 可用方向鍵試玩","warn"); port=null; return; }
-  connectBtn.textContent="斷線"; setStatus("已連線","on"); keepReading=true; readLoop();
-  uploadLog({ type:"connect" });
+  catch{ setStatus("未選擇 USB 裝置","warn"); port=null; return; }
+  usbBtn.textContent="USB 斷線"; setStatus("USB 已連線","on"); keepReadingSerial=true; serialLoop();
+  uploadLog({ type:"connect", via:"usb" });
 }
-async function disconnect(){
-  keepReading=false;
+async function disconnectSerial(){
+  keepReadingSerial=false;
   try{ if(reader){ await reader.cancel(); reader.releaseLock(); } }catch{}
   try{ if(port){ await port.close(); } }catch{}
-  port=null; reader=null; connectBtn.textContent="連接裝置"; setStatus("未連線 · 可用方向鍵試玩","");
-  uploadLog({ type:"disconnect" });
+  port=null; reader=null; usbBtn.textContent="USB 連線"; setStatus("未連線","");
+  uploadLog({ type:"disconnect", via:"usb" });
 }
-async function readLoop(){
+async function serialLoop(){
   const dec=new TextDecoderStream(); port.readable.pipeTo(dec.writable).catch(()=>{});
   reader=dec.readable.getReader(); let buf="";
-  while(keepReading){ let r; try{ r=await reader.read(); }catch{ break; } if(r.done) break;
+  while(keepReadingSerial){ let r; try{ r=await reader.read(); }catch{ break; } if(r.done) break;
     buf+=r.value; let i;
-    while((i=buf.indexOf("\n"))>=0){ const ln=buf.slice(0,i).trim(); buf=buf.slice(i+1);
-      const b=parseFFTLine(ln); if(b){ lastFFT=b; lastTs=performance.now()/1000; } } }
+    while((i=buf.indexOf("\n"))>=0){ const ln=buf.slice(0,i).trim(); buf=buf.slice(i+1); onFFTLine(ln); } }
 }
 
-// ---------- 鍵盤試玩(↑ 吸氣, ↓ 吐氣) ----------
+// ---- 藍芽 (Web Bluetooth, Nordic UART Service) ----
+const NUS_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const NUS_TX      = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // 裝置->手機 notify
+let bleDevice=null, bleChar=null, bleBuf="";
+async function connectBLE(){
+  if(bleDevice){ await disconnectBLE(); return; }
+  if(!("bluetooth" in navigator)){ setStatus("此瀏覽器不支援藍芽，Android 請用 Chrome","warn"); return; }
+  try{
+    bleDevice = await navigator.bluetooth.requestDevice({
+      filters:[{ name:"SmartInhaler" }, { services:[NUS_SERVICE] }],
+      optionalServices:[NUS_SERVICE],
+    });
+    bleDevice.addEventListener("gattserverdisconnected", onBLEDrop);
+    const server = await bleDevice.gatt.connect();
+    const service = await server.getPrimaryService(NUS_SERVICE);
+    bleChar = await service.getCharacteristic(NUS_TX);
+    await bleChar.startNotifications();
+    bleChar.addEventListener("characteristicvaluechanged", onBLEData);
+    bleBtn.textContent="藍芽斷線"; setStatus("藍芽已連線","on");
+    uploadLog({ type:"connect", via:"ble" });
+  }catch(err){
+    console.warn("BLE 連線失敗:", err);
+    setStatus("藍芽未連線 / 已取消","warn"); bleDevice=null; bleChar=null;
+  }
+}
+function onBLEData(e){
+  const dec = new TextDecoder();
+  bleBuf += dec.decode(e.target.value);
+  let i;
+  while((i=bleBuf.indexOf("\n"))>=0){ const ln=bleBuf.slice(0,i).trim(); bleBuf=bleBuf.slice(i+1); onFFTLine(ln); }
+}
+function onBLEDrop(){ setStatus("藍芽已斷線","warn"); bleBtn.textContent="藍芽連線"; bleDevice=null; bleChar=null;
+  uploadLog({ type:"disconnect", via:"ble" }); }
+async function disconnectBLE(){
+  try{ if(bleChar) await bleChar.stopNotifications(); }catch{}
+  try{ if(bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect(); }catch{}
+  bleDevice=null; bleChar=null; bleBtn.textContent="藍芽連線"; setStatus("未連線","");
+}
+
+// ---- 觸控 / 鍵盤試玩 ----
 let upDown=false, dnDown=false, upFlow=0, dnFlow=0;
 addEventListener("keydown", e=>{ if(e.key==="ArrowUp"){upDown=true;e.preventDefault();}
   if(e.key==="ArrowDown"){dnDown=true;e.preventDefault();}
   if(e.code==="Space"){ onPrimary(); e.preventDefault(); } });
 addEventListener("keyup", e=>{ if(e.key==="ArrowUp")upDown=false; if(e.key==="ArrowDown")dnDown=false; });
 
-// ---------- 取樣即時輸入 ----------
-// 方向分類器本身對吐氣的辨識率比吸氣低(模型偏向判成吸氣),逐幀直接採用
-// 會讓吐氣類遊戲(氣球)很難被判定成功。所以只在氣球進行中,套用「短時間內
-// 只要出現過一次吐氣,就判定為吐氣」的偏向修正;憤怒鳥用的是吸氣,模型
-// 對吸氣本來就判得準,維持逐幀即時判斷、完全不套用這個修正。
-const EXHALE_BIAS_WINDOW = 0.4; // 氣球專用:這段時間內出現過吐氣就算吐氣(秒)
-let exhaleBiasBuffer = [];      // { t } 最近偵測到吐氣的時間戳記
+function bindHold(el, setter){
+  const on=(e)=>{ e.preventDefault(); setter(true); };
+  const off=(e)=>{ e.preventDefault(); setter(false); };
+  el.addEventListener("touchstart",on,{passive:false}); el.addEventListener("touchend",off,{passive:false});
+  el.addEventListener("touchcancel",off,{passive:false});
+  el.addEventListener("mousedown",on); el.addEventListener("mouseup",off); el.addEventListener("mouseleave",off);
+}
 
+// ---------- 取樣即時輸入 ----------
+const EXHALE_BIAS_WINDOW = 0.4;
+let exhaleBiasBuffer = [];
 function sample(now, dt){
   const RAMP=240, DECAY=420, KMAX=150;
   upFlow = upDown ? Math.min(KMAX,upFlow+RAMP*dt) : Math.max(0,upFlow-DECAY*dt);
   dnFlow = dnDown ? Math.min(KMAX,dnFlow+RAMP*dt) : Math.max(0,dnFlow-DECAY*dt);
   let flow=0, direction=null;
-  // 鍵盤優先(試玩);否則用裝置
   if(upFlow>1 || dnFlow>1){
     if(upFlow>=dnFlow){ flow=upFlow; direction="inhalation"; }
     else { flow=dnFlow; direction="exhalation"; }
@@ -202,18 +261,13 @@ function sample(now, dt){
     const a=analyze(lastFFT);
     if(a.active){
       flow=a.flow; direction=a.direction;
-      // 只有氣球在玩的時候,套用「短時間內出現過吐氣就判定吐氣」的偏向修正
       if(current===GAMES.balloon){
         if(direction==="exhalation") exhaleBiasBuffer.push({t:now});
         exhaleBiasBuffer = exhaleBiasBuffer.filter(b=> now-b.t <= EXHALE_BIAS_WINDOW);
         if(exhaleBiasBuffer.length>0) direction="exhalation";
       }
-    } else {
-      exhaleBiasBuffer=[];
-    }
-  } else {
-    exhaleBiasBuffer=[];
-  }
+    } else { exhaleBiasBuffer=[]; }
+  } else { exhaleBiasBuffer=[]; }
   const active = flow>=ONSET;
   const signed = direction==="inhalation"? flow : direction==="exhalation"? -flow : 0;
   return { flow, direction, active, signed, now, dt };
@@ -251,44 +305,36 @@ function startGame(id){
   current = GAMES[id]; if(!current) return;
   currentId = id;
   hub.style.display="none"; bottom.classList.remove("hide");
+  touchpad.classList.add("show");
   if(current.reset) current.reset(api);
   primary.textContent = current.primaryLabel? (current.primaryLabel()||"") : "";
   primary.style.display = primary.textContent? "" : "none";
   resize();
-  segActive=false; segSamples=[]; // 切換遊戲時重置波形紀錄，避免跨遊戲混在一起
+  segActive=false; segSamples=[];
   uploadLog({ type:"game_start", game:id });
 }
 function toHub(){ current=null; currentId=null; hub.style.display="flex"; bottom.classList.add("hide");
-  segActive=false; segSamples=[]; }
+  touchpad.classList.remove("show"); segActive=false; segSamples=[]; }
 function onPrimary(){ if(current && current.primary){ current.primary(api);
   if(current.primaryLabel){ const t=current.primaryLabel()||""; primary.textContent=t;
     primary.style.display=t?"":"none"; } } }
 
-// ---------- 波形紀錄(新增) ----------
-// 不改動遊戲檔案本身，直接在這裡監看每一幀的 flow，偵測「開始有氣流 → 持續 → 停止」
-// 這樣一段完整的呼吸動作，結束時把整段 flow-time 序列打包上傳(type:"attempt")。
-// 好處：連失敗的嘗試也會被記下來，三個遊戲檔案完全不用改。
-const SEG_MIN_DURATION = 0.15; // 太短的雜訊不上傳(秒)
-const SEG_MAX_POINTS = 150;    // 單筆序列最多留幾個點(超過就等距抽樣)
+// ---------- 波形紀錄 ----------
+const SEG_MIN_DURATION = 0.15;
+const SEG_MAX_POINTS = 150;
 let segActive=false, segStart=0, segSamples=[];
-
 function downsample(arr, maxPoints){
   if(arr.length<=maxPoints) return arr;
-  const stride = arr.length/maxPoints;
-  const out=[];
+  const stride = arr.length/maxPoints; const out=[];
   for(let i=0;i<maxPoints;i++) out.push(arr[Math.floor(i*stride)]);
   return out;
 }
-
 function handleSegment(input){
-  if(!current) { segActive=false; segSamples=[]; return; } // 沒在玩遊戲時不記錄
+  if(!current){ segActive=false; segSamples=[]; return; }
   if(input.active){
     if(!segActive){ segActive=true; segStart=input.now; segSamples=[]; }
-    segSamples.push({
-      t:+(input.now-segStart).toFixed(2),                 // 相對時間(秒)
-      f:Math.round(input.flow),                             // 流量(任意單位，跟遊戲內部一致)
-      d:input.direction==="inhalation"?1:input.direction==="exhalation"?-1:0, // 1=吸氣 -1=吐氣
-    });
+    segSamples.push({ t:+(input.now-segStart).toFixed(2), f:Math.round(input.flow),
+      d:input.direction==="inhalation"?1:input.direction==="exhalation"?-1:0 });
   } else if(segActive){
     segActive=false;
     const duration = input.now - segStart;
@@ -318,21 +364,29 @@ function loop(){
 }
 
 // ---------- 綁定 ----------
-const connectBtn=document.getElementById("connectBtn");
+const bleBtn=document.getElementById("bleBtn");
+const usbBtn=document.getElementById("usbBtn");
 const statusEl=document.getElementById("status");
 const syncStatusEl=document.getElementById("syncStatus");
 const nameEl=document.getElementById("name");
 const primary=document.getElementById("primary");
 const hub=document.getElementById("hub");
 const bottom=document.getElementById("bottom");
+const touchpad=document.getElementById("touchpad");
 function setStatus(t,cls=""){ statusEl.textContent="● "+t; statusEl.className=cls; }
-connectBtn.onclick=connect;
+bleBtn.onclick=connectBLE;
+usbBtn.onclick=connectSerial;
 document.getElementById("backBtn").onclick=toHub;
 primary.onclick=onPrimary;
 document.querySelectorAll(".card").forEach(c=> c.onclick=()=>startGame(c.dataset.game));
+bindHold(document.getElementById("tInhale"), v=>upDown=v);
+bindHold(document.getElementById("tExhale"), v=>dnDown=v);
 nameEl.value = store.get("name","")||"";
 nameEl.onchange=()=> store.set("name", nameEl.value.trim());
-setStatus(`未連線 · 可用方向鍵試玩 · ${algoStatus()}`,"");
+
+// 手機沒有 Web Serial 時，隱藏 USB 按鈕，主推藍芽
+if(!("serial" in navigator)) usbBtn.style.display="none";
+setStatus(`未連線 · ${algoStatus()}`,"");
 
 resize(); loop();
 </script>
