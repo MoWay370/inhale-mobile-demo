@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>呼吸訓練遊戲廳</title>
+<style>
+  :root{
+    --bg:#43111a; --panel:#5c1a26; --header:#370d14; --track:#2c0910;
+    --gold:#ffd24a; --gold-dk:#b8862a; --red:#e6402f; --red-br:#ff6a52;
+    --cream:#fff3df; --green:#7fe08d; --blue:#5fb0ff; --dim:#e0b58f;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--cream);
+    font-family:"Microsoft JhengHei UI","PingFang TC","Noto Sans TC",sans-serif;overflow:hidden;}
+  #app{display:flex;flex-direction:column;height:100vh;}
+  .bar{background:var(--header);display:flex;align-items:center;gap:8px;padding:8px 12px;flex-wrap:wrap;}
+  button{font-family:inherit;border:none;border-radius:10px;cursor:pointer;font-weight:700;
+    transition:transform .06s ease, filter .15s ease;}
+  button:active{transform:translateY(1px) scale(.99);}
+  .btn-gold{background:var(--gold);color:#3a0a10;} .btn-dk{background:var(--panel);color:var(--cream);}
+  .btn-red{background:var(--red);color:var(--cream);}
+  .btn-md{font-size:15px;padding:9px 16px;} .btn-lg{font-size:20px;padding:13px 24px;}
+  input{font-family:inherit;background:var(--panel);color:var(--cream);border:none;border-radius:8px;
+    padding:8px 10px;font-size:15px;outline:none;}
+  #status{font-size:14px;color:var(--dim);} #status.on{color:var(--green);} #status.warn{color:var(--gold);}
+  label{font-size:14px;color:var(--dim);}
+  .spacer{flex:1;}
+  #wrap{flex:1;position:relative;min-height:0;}
+  canvas{width:100%;height:100%;display:block;}
+  /* 主選單 */
+  #hub{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:22px;padding:24px;background:var(--bg);}
+  #hub h1{font-size:min(46px,7vw);color:var(--gold);margin:0;}
+  #hub p{color:var(--dim);margin:0 0 6px;font-size:16px;}
+  .cards{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;max-width:1000px;}
+  .card{width:280px;min-height:220px;border-radius:18px;padding:22px;cursor:pointer;
+    display:flex;flex-direction:column;gap:10px;color:#2a0a10;
+    box-shadow:0 6px 0 rgba(0,0,0,.25);transition:transform .1s ease, box-shadow .1s ease;}
+  .card:hover{transform:translateY(-4px);box-shadow:0 10px 0 rgba(0,0,0,.25);}
+  .card:active{transform:translateY(2px);box-shadow:0 3px 0 rgba(0,0,0,.25);}
+  .card .big{font-size:30px;font-weight:800;}
+  .card .tag{font-size:14px;font-weight:800;opacity:.7;}
+  .card .desc{font-size:15px;line-height:1.5;font-weight:600;}
+  .c1{background:linear-gradient(160deg,#ffd24a,#ffb03a);}
+  .c2{background:linear-gradient(160deg,#8fe0a0,#5fb0ff);}
+  .c3{background:linear-gradient(160deg,#ffb0b0,#ff7a6a);}
+  #bottom{margin-top:auto;}
+  #bottom.hide{display:none;}
+  /* 上傳狀態小提示 */
+  #syncStatus{font-size:12px;color:var(--dim);opacity:.85;}
+  #syncStatus.err{color:var(--red-br);}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="bar top">
+    <button id="connectBtn" class="btn-gold btn-md">連接裝置</button>
+    <span id="status">未連線 · 可用「↑ ↓ 方向鍵」試玩</span>
+    <span class="spacer"></span>
+    <span id="syncStatus"></span>
+    <label>姓名 / 編號</label>
+    <input id="name" maxlength="12" size="8" placeholder="使用者" />
+  </div>
+
+  <div id="wrap">
+    <canvas id="cv"></canvas>
+    <div id="hub">
+      <p>呼吸訓練遊戲廳</p>
+      <h1>選一個遊戲開始</h1>
+      <div class="cards">
+        <div class="card c1" data-game="angrybird">
+          <div class="tag">爆發力 · 吸氣</div>
+          <div class="big">🐦 吸氣彈弓鳥</div>
+          <div class="desc">深吸一口氣蓄力，放開就發射，把小鳥射去撞倒豬堡壘。練最大吸氣流速。</div>
+        </div>
+        <div class="card c3" data-game="balloon">
+          <div class="tag">耐力 · 持久吐氣</div>
+          <div class="big">🎈 吹氣球</div>
+          <div class="desc">穩穩地把氣持續吐出去，讓氣球越吹越大，撐住就放飛。練持久力。</div>
+        </div>
+        <div class="card c2" data-game="taiko">
+          <div class="tag">節奏 · 吸+吐</div>
+          <div class="big">🥁 呼吸太鼓</div>
+          <div class="desc">跟著長條吸氣、吐氣，顏色就是指令。整條吹好就是「良」。練呼吸節奏。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="bottom" class="bar hide">
+    <button id="backBtn" class="btn-dk btn-md">← 返回選單</button>
+    <span class="spacer"></span>
+    <button id="primary" class="btn-gold btn-lg">開始</button>
+  </div>
+</div>
+
+<script type="module">
+import { analyze, parseFFTLine, status as algoStatus } from "./breath_algorithm.js";
+import angrybird from "./game_angrybird.js";
+import balloon from "./game_balloon.js";
+import taiko from "./game_taiko.js";
+
+const GAMES = { angrybird, balloon, taiko };
+const ONSET = 12;
+
+// ---------- 顏色(給遊戲用) ----------
+const COLORS = { bg:"#43111a", panel:"#5c1a26", header:"#370d14", track:"#2c0910",
+  gold:"#ffd24a", goldDk:"#b8862a", red:"#e6402f", redBr:"#ff6a52",
+  cream:"#fff3df", green:"#7fe08d", blue:"#5fb0ff", dim:"#e0b58f" };
+
+// ================= 雲端上傳(新增) =================
+// 每次呼叫 store.set(...) 時，除了照原本寫入 localStorage，
+// 也會背景把這筆事件 POST 給後端 /api/log(Vercel Serverless Function)。
+// 上傳失敗(離線、伺服器錯誤等)不影響遊戲本身 —— 全部 fire-and-forget，
+// 並在畫面右上角顯示簡單的同步狀態提示。
+const LOG_ENDPOINT = "/api/log";
+
+function setSyncStatus(text, isErr=false){
+  syncStatusEl.textContent = text;
+  syncStatusEl.className = isErr ? "err" : "";
+}
+
+async function uploadLog(payload){
+  try{
+    const res = await fetch(LOG_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: api.name(), ts: Date.now(), ...payload }),
+    });
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    setSyncStatus("☁ 已同步");
+  }catch(err){
+    console.warn("上傳失敗(不影響遊戲):", err);
+    setSyncStatus("☁ 同步失敗，稍後重試", true);
+  }
+}
+
+// ---------- 儲存(本機 localStorage,失敗則記憶體 + 背景上傳雲端) ----------
+const mem = {};
+const store = {
+  get(k, def=null){ try{ const v=localStorage.getItem("bt_"+k); return v==null?def:JSON.parse(v); }
+    catch{ return (k in mem)?mem[k]:def; } },
+  set(k, v){
+    try{ localStorage.setItem("bt_"+k, JSON.stringify(v)); }catch{ mem[k]=v; }
+    // 背景上傳:把這次寫入的 key/value 當成一筆「成績事件」送到後端
+    uploadLog({ type:"score", game: current ? currentId : null, key:k, value:v });
+  },
+};
+
+// ---------- 裝置連線(Web Serial;裝置只送 FFT) ----------
+let port=null, reader=null, keepReading=false, lastFFT=null, lastTs=0;
+async function connect(){
+  if(port){ await disconnect(); return; }
+  if(!("serial" in navigator)){ setStatus("此瀏覽器不支援 Web Serial,請用 Chrome/Edge","warn"); return; }
+  try{ port=await navigator.serial.requestPort(); await port.open({baudRate:115200}); }
+  catch{ setStatus("未選擇裝置 · 可用方向鍵試玩","warn"); port=null; return; }
+  connectBtn.textContent="斷線"; setStatus("已連線","on"); keepReading=true; readLoop();
+  uploadLog({ type:"connect" });
+}
+async function disconnect(){
+  keepReading=false;
+  try{ if(reader){ await reader.cancel(); reader.releaseLock(); } }catch{}
+  try{ if(port){ await port.close(); } }catch{}
+  port=null; reader=null; connectBtn.textContent="連接裝置"; setStatus("未連線 · 可用方向鍵試玩","");
+  uploadLog({ type:"disconnect" });
+}
+async function readLoop(){
+  const dec=new TextDecoderStream(); port.readable.pipeTo(dec.writable).catch(()=>{});
+  reader=dec.readable.getReader(); let buf="";
+  while(keepReading){ let r; try{ r=await reader.read(); }catch{ break; } if(r.done) break;
+    buf+=r.value; let i;
+    while((i=buf.indexOf("\n"))>=0){ const ln=buf.slice(0,i).trim(); buf=buf.slice(i+1);
+      const b=parseFFTLine(ln); if(b){ lastFFT=b; lastTs=performance.now()/1000; } } }
+}
+
+// ---------- 鍵盤試玩(↑ 吸氣, ↓ 吐氣) ----------
+let upDown=false, dnDown=false, upFlow=0, dnFlow=0;
+addEventListener("keydown", e=>{ if(e.key==="ArrowUp"){upDown=true;e.preventDefault();}
+  if(e.key==="ArrowDown"){dnDown=true;e.preventDefault();}
+  if(e.code==="Space"){ onPrimary(); e.preventDefault(); } });
+addEventListener("keyup", e=>{ if(e.key==="ArrowUp")upDown=false; if(e.key==="ArrowDown")dnDown=false; });
+
+// ---------- 取樣即時輸入 ----------
+// 方向分類器本身對吐氣的辨識率比吸氣低(模型偏向判成吸氣),逐幀直接採用
+// 會讓吐氣類遊戲(氣球)很難被判定成功。所以只在氣球進行中,套用「短時間內
+// 只要出現過一次吐氣,就判定為吐氣」的偏向修正;憤怒鳥用的是吸氣,模型
+// 對吸氣本來就判得準,維持逐幀即時判斷、完全不套用這個修正。
+const EXHALE_BIAS_WINDOW = 0.4; // 氣球專用:這段時間內出現過吐氣就算吐氣(秒)
+let exhaleBiasBuffer = [];      // { t } 最近偵測到吐氣的時間戳記
+
+function sample(now, dt){
+  const RAMP=240, DECAY=420, KMAX=150;
+  upFlow = upDown ? Math.min(KMAX,upFlow+RAMP*dt) : Math.max(0,upFlow-DECAY*dt);
+  dnFlow = dnDown ? Math.min(KMAX,dnFlow+RAMP*dt) : Math.max(0,dnFlow-DECAY*dt);
+  let flow=0, direction=null;
+  // 鍵盤優先(試玩);否則用裝置
+  if(upFlow>1 || dnFlow>1){
+    if(upFlow>=dnFlow){ flow=upFlow; direction="inhalation"; }
+    else { flow=dnFlow; direction="exhalation"; }
+  } else if(now-lastTs<0.3 && lastFFT){
+    const a=analyze(lastFFT);
+    if(a.active){
+      flow=a.flow; direction=a.direction;
+      // 只有氣球在玩的時候,套用「短時間內出現過吐氣就判定吐氣」的偏向修正
+      if(current===GAMES.balloon){
+        if(direction==="exhalation") exhaleBiasBuffer.push({t:now});
+        exhaleBiasBuffer = exhaleBiasBuffer.filter(b=> now-b.t <= EXHALE_BIAS_WINDOW);
+        if(exhaleBiasBuffer.length>0) direction="exhalation";
+      }
+    } else {
+      exhaleBiasBuffer=[];
+    }
+  } else {
+    exhaleBiasBuffer=[];
+  }
+  const active = flow>=ONSET;
+  const signed = direction==="inhalation"? flow : direction==="exhalation"? -flow : 0;
+  return { flow, direction, active, signed, now, dt };
+}
+
+// ---------- 繪圖 helper ----------
+const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
+function resize(){ const r=cv.getBoundingClientRect(), dpr=devicePixelRatio||1;
+  cv.width=r.width*dpr; cv.height=r.height*dpr; ctx.setTransform(dpr,0,0,dpr,0,0); }
+addEventListener("resize", resize);
+const g = {
+  ctx, colors: COLORS,
+  clear(c){ ctx.fillStyle=c||COLORS.bg; ctx.fillRect(0,0,cv.clientWidth,cv.clientHeight); },
+  rrect(x1,y1,x2,y2,r){ r=Math.min(r,Math.abs(x2-x1)/2,Math.abs(y2-y1)/2); ctx.beginPath();
+    ctx.moveTo(x1+r,y1); ctx.arcTo(x2,y1,x2,y2,r); ctx.arcTo(x2,y2,x1,y2,r);
+    ctx.arcTo(x1,y2,x1,y1,r); ctx.arcTo(x1,y1,x2,y1,r); ctx.closePath(); },
+  fill(c){ ctx.fillStyle=c; ctx.fill(); }, stroke(c,w){ ctx.strokeStyle=c; ctx.lineWidth=w||2; ctx.stroke(); },
+  text(t,x,y,size,c,align="center",bold=true){ ctx.fillStyle=c; ctx.textAlign=align; ctx.textBaseline="middle";
+    ctx.font=`${bold?"bold ":""}${size}px "Microsoft JhengHei UI","Noto Sans TC",sans-serif`; ctx.fillText(t,x,y); },
+  line(x1,y1,x2,y2,c,w,dash){ ctx.strokeStyle=c; ctx.lineWidth=w||2; ctx.setLineDash(dash||[]);
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); ctx.setLineDash([]); },
+  circle(x,y,r,c,fill=true){ ctx.beginPath(); ctx.arc(x,y,r,0,6.283);
+    if(fill){ ctx.fillStyle=c; ctx.fill(); } else { ctx.strokeStyle=c; ctx.lineWidth=2; ctx.stroke(); } },
+};
+
+// ---------- API 給遊戲 ----------
+const api = { colors:COLORS, store, ONSET,
+  name(){ return (nameEl.value.trim()||"使用者"); },
+  back(){ toHub(); },
+};
+
+// ---------- 遊戲切換 ----------
+let current=null, currentId=null;
+function startGame(id){
+  current = GAMES[id]; if(!current) return;
+  currentId = id;
+  hub.style.display="none"; bottom.classList.remove("hide");
+  if(current.reset) current.reset(api);
+  primary.textContent = current.primaryLabel? (current.primaryLabel()||"") : "";
+  primary.style.display = primary.textContent? "" : "none";
+  resize();
+  segActive=false; segSamples=[]; // 切換遊戲時重置波形紀錄，避免跨遊戲混在一起
+  uploadLog({ type:"game_start", game:id });
+}
+function toHub(){ current=null; currentId=null; hub.style.display="flex"; bottom.classList.add("hide");
+  segActive=false; segSamples=[]; }
+function onPrimary(){ if(current && current.primary){ current.primary(api);
+  if(current.primaryLabel){ const t=current.primaryLabel()||""; primary.textContent=t;
+    primary.style.display=t?"":"none"; } } }
+
+// ---------- 波形紀錄(新增) ----------
+// 不改動遊戲檔案本身，直接在這裡監看每一幀的 flow，偵測「開始有氣流 → 持續 → 停止」
+// 這樣一段完整的呼吸動作，結束時把整段 flow-time 序列打包上傳(type:"attempt")。
+// 好處：連失敗的嘗試也會被記下來，三個遊戲檔案完全不用改。
+const SEG_MIN_DURATION = 0.15; // 太短的雜訊不上傳(秒)
+const SEG_MAX_POINTS = 150;    // 單筆序列最多留幾個點(超過就等距抽樣)
+let segActive=false, segStart=0, segSamples=[];
+
+function downsample(arr, maxPoints){
+  if(arr.length<=maxPoints) return arr;
+  const stride = arr.length/maxPoints;
+  const out=[];
+  for(let i=0;i<maxPoints;i++) out.push(arr[Math.floor(i*stride)]);
+  return out;
+}
+
+function handleSegment(input){
+  if(!current) { segActive=false; segSamples=[]; return; } // 沒在玩遊戲時不記錄
+  if(input.active){
+    if(!segActive){ segActive=true; segStart=input.now; segSamples=[]; }
+    segSamples.push({
+      t:+(input.now-segStart).toFixed(2),                 // 相對時間(秒)
+      f:Math.round(input.flow),                             // 流量(任意單位，跟遊戲內部一致)
+      d:input.direction==="inhalation"?1:input.direction==="exhalation"?-1:0, // 1=吸氣 -1=吐氣
+    });
+  } else if(segActive){
+    segActive=false;
+    const duration = input.now - segStart;
+    if(duration>=SEG_MIN_DURATION && segSamples.length>0){
+      uploadLog({ type:"attempt", game:currentId, duration:+duration.toFixed(2),
+        series: downsample(segSamples, SEG_MAX_POINTS) });
+    }
+    segSamples=[];
+  }
+}
+
+// ---------- 主迴圈 ----------
+let last=performance.now()/1000;
+function loop(){
+  const now=performance.now()/1000; let dt=Math.min(now-last,0.1); last=now;
+  const input=sample(now,dt);
+  handleSegment(input);
+  const w=cv.clientWidth, h=cv.clientHeight;
+  if(current){
+    if(current.update) current.update(dt,input,api);
+    g.clear(COLORS.bg);
+    if(current.render) current.render(g,w,h,api);
+    if(current.primaryLabel){ const t=current.primaryLabel()||"";
+      if(primary.textContent!==t){ primary.textContent=t; primary.style.display=t?"":"none"; } }
+  }
+  requestAnimationFrame(loop);
+}
+
+// ---------- 綁定 ----------
+const connectBtn=document.getElementById("connectBtn");
+const statusEl=document.getElementById("status");
+const syncStatusEl=document.getElementById("syncStatus");
+const nameEl=document.getElementById("name");
+const primary=document.getElementById("primary");
+const hub=document.getElementById("hub");
+const bottom=document.getElementById("bottom");
+function setStatus(t,cls=""){ statusEl.textContent="● "+t; statusEl.className=cls; }
+connectBtn.onclick=connect;
+document.getElementById("backBtn").onclick=toHub;
+primary.onclick=onPrimary;
+document.querySelectorAll(".card").forEach(c=> c.onclick=()=>startGame(c.dataset.game));
+nameEl.value = store.get("name","")||"";
+nameEl.onchange=()=> store.set("name", nameEl.value.trim());
+setStatus(`未連線 · 可用方向鍵試玩 · ${algoStatus()}`,"");
+
+resize(); loop();
+</script>
+</body>
+</html>

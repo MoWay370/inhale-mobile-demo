@@ -1,0 +1,7 @@
+{
+  "name": "breath-training-app",
+  "version": "1.0.0",
+  "dependencies": {
+    "ioredis": "^5.4.1"
+  }
+}

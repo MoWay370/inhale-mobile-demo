@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>i-Breath 訓練紀錄後台</title>
+<style>
+  :root{
+    --bg:#f4f7fb; --panel:#ffffff; --border:#e1e8f0; --header:#ffffff;
+    --primary:#1a6fd6; --primary-dk:#0f4f9e; --primary-lt:#eaf2fd;
+    --text:#1c2b3a; --dim:#5f7186; --dim-lt:#8ea1b5;
+    --green:#1f9d63; --green-lt:#e5f7ee;
+    --red:#d64545; --red-lt:#fbe8e8;
+    --amber:#c98a13; --amber-lt:#fbf1de;
+    --teal:#0e8f8f; --teal-lt:#e3f7f7;
+    --radius:12px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Microsoft JhengHei UI","PingFang TC","Noto Sans TC",sans-serif;}
+
+  /* ---------- 登入畫面 ---------- */
+  #loginScreen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(160deg,#eaf2fd,#f4f7fb);}
+  .login-card{background:var(--panel);border:1px solid var(--border);border-radius:16px;
+    padding:40px 36px;width:340px;box-shadow:0 8px 30px rgba(20,60,110,.08);text-align:center;}
+  .login-card .icon{width:52px;height:52px;border-radius:14px;background:var(--primary-lt);
+    color:var(--primary);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:26px;}
+  .login-card h1{font-size:19px;margin:0 0 4px;color:var(--text);}
+  .login-card p{font-size:13px;color:var(--dim);margin:0 0 24px;}
+  .login-card input{width:100%;padding:11px 14px;margin-bottom:12px;border:1px solid var(--border);
+    border-radius:9px;font-size:14px;background:#fbfdff;color:var(--text);outline:none;font-family:inherit;}
+  .login-card input:focus{border-color:var(--primary);}
+  .login-card button{width:100%;padding:12px;border:none;border-radius:9px;background:var(--primary);
+    color:#fff;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;}
+  .login-card button:hover{background:var(--primary-dk);}
+  #loginErr{color:var(--red);font-size:13px;margin-top:10px;min-height:16px;}
+
+  /* ---------- 主畫面 ---------- */
+  #app{display:none;}
+  header{background:var(--header);border-bottom:1px solid var(--border);padding:16px 28px;
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+  header .brand{display:flex;align-items:center;gap:10px;}
+  header .brand .dot{width:10px;height:10px;border-radius:50%;background:var(--primary);}
+  header h1{font-size:18px;margin:0;color:var(--text);font-weight:700;}
+  header .sub{font-size:12px;color:var(--dim-lt);}
+  #logoutBtn{margin-left:auto;background:transparent;border:1px solid var(--border);color:var(--dim);
+    padding:7px 14px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;}
+  #logoutBtn:hover{border-color:var(--primary);color:var(--primary);}
+
+  main{padding:24px 28px;max-width:1200px;margin:0 auto;}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:20px;
+    background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;}
+  .controls label{font-size:13px;color:var(--dim);font-weight:600;}
+  input, select{font-family:inherit;background:#fbfdff;color:var(--text);border:1px solid var(--border);
+    border-radius:8px;padding:8px 11px;font-size:13px;outline:none;}
+  input:focus, select:focus{border-color:var(--primary);}
+  button.action{font-family:inherit;background:var(--primary);color:#fff;border:none;border-radius:8px;
+    padding:9px 18px;font-weight:700;cursor:pointer;font-size:13px;}
+  button.action:hover{background:var(--primary-dk);}
+
+  .stat-cards{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:22px;}
+  .stat{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    padding:16px 20px;min-width:150px;flex:1;}
+  .stat .num{font-size:28px;font-weight:800;color:var(--primary);}
+  .stat .label{font-size:12px;color:var(--dim);margin-top:2px;}
+
+  .section{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    overflow:hidden;margin-bottom:24px;}
+  .section h2{font-size:14px;margin:0;padding:14px 18px;border-bottom:1px solid var(--border);
+    color:var(--text);background:#fafcff;}
+  table{width:100%;border-collapse:collapse;}
+  th,td{text-align:left;padding:11px 18px;font-size:13px;border-bottom:1px solid var(--border);}
+  th{color:var(--dim);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.02em;}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:#fafcff;}
+  .tag{display:inline-block;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:700;}
+  .tag-score{background:var(--primary-lt);color:var(--primary-dk);}
+  .tag-connect{background:var(--green-lt);color:var(--green);}
+  .tag-disconnect{background:var(--red-lt);color:var(--red);}
+  .tag-game_start{background:var(--amber-lt);color:var(--amber);}
+  .tag-attempt{background:var(--teal-lt);color:var(--teal);}
+  .spark{display:block;}
+  .dl-btn{background:var(--primary-lt);color:var(--primary-dk);border:none;border-radius:6px;
+    padding:4px 10px;font-size:13px;cursor:pointer;font-family:inherit;}
+  .dl-btn:hover{background:var(--primary);color:#fff;}
+  #msg{color:var(--dim);font-size:13px;margin:0 0 16px;}
+  .empty{padding:40px;text-align:center;color:var(--dim-lt);}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="icon">🩺</div>
+    <h1>i-Breath 訓練紀錄後台</h1>
+    <p>請登入以查看訓練資料</p>
+    <input id="loginUser" placeholder="帳號" autocomplete="username" />
+    <input id="loginPass" type="password" placeholder="密碼" autocomplete="current-password" />
+    <button id="loginBtn">登入</button>
+    <div id="loginErr"></div>
+  </div>
+</div>
+
+<div id="app">
+  <header>
+    <div class="brand">
+      <span class="dot"></span>
+      <div>
+        <h1>i-Breath 訓練紀錄後台</h1>
+        <div class="sub">呼吸訓練遊戲廳 · 雲端數據</div>
+      </div>
+    </div>
+    <button id="logoutBtn">登出</button>
+  </header>
+
+  <main>
+    <div class="controls">
+      <label>天數</label>
+      <select id="days">
+        <option value="1">今天</option>
+        <option value="7" selected>最近 7 天</option>
+        <option value="30">最近 30 天</option>
+        <option value="90">最近 90 天</option>
+      </select>
+      <label>使用者姓名/編號</label>
+      <input id="nameFilter" placeholder="留空 = 全部" size="12" />
+      <button class="action" id="refreshBtn">重新整理</button>
+      <button class="action" id="exportAllBtn" style="background:var(--teal);">匯出全部波形 (JSON)</button>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="stat-cards" id="statCards"></div>
+
+    <div class="section">
+      <h2>事件明細 <span style="font-weight:400;color:var(--dim);font-size:12px;">（波形數值單位：L/min，來自裝置聲學流量估計模型）</span></h2>
+      <table id="tbl">
+        <thead>
+          <tr><th>時間</th><th>使用者</th><th>事件</th><th>遊戲</th><th>項目</th><th>數值</th><th>波形</th><th>下載</th></tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>各使用者最佳成績</h2>
+      <table id="bestTbl">
+        <thead><tr><th>使用者</th><th>項目</th><th>最佳值</th></tr></thead>
+        <tbody id="bestTbody"></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<script>
+const loginScreen = document.getElementById("loginScreen");
+const appEl = document.getElementById("app");
+const loginUser = document.getElementById("loginUser");
+const loginPass = document.getElementById("loginPass");
+const loginBtn = document.getElementById("loginBtn");
+const loginErr = document.getElementById("loginErr");
+const logoutBtn = document.getElementById("logoutBtn");
+
+const daysEl = document.getElementById("days");
+const nameFilterEl = document.getElementById("nameFilter");
+const refreshBtn = document.getElementById("refreshBtn");
+const msgEl = document.getElementById("msg");
+const tbody = document.getElementById("tbody");
+const bestTbody = document.getElementById("bestTbody");
+const statCards = document.getElementById("statCards");
+
+const GAME_LABEL = { angrybird:"吸氣彈弓鳥", balloon:"吹氣球", taiko:"呼吸太鼓" };
+const TYPE_LABEL = { score:"成績", connect:"連線", disconnect:"斷線", game_start:"開始遊戲", attempt:"呼吸波形" };
+const TYPE_CLASS = { score:"tag-score", connect:"tag-connect", disconnect:"tag-disconnect", game_start:"tag-game_start", attempt:"tag-attempt" };
+
+// 畫一個小型 flow-time 折線圖(SVG)，series: [{t,f,d}, ...]
+function sparkline(series){
+  if(!series || !series.length) return "-";
+  const w=130, h=34, pad=3;
+  const maxF = Math.max(10, ...series.map(p=>Math.abs(p.f)));
+  const n = series.length;
+  const stepX = n>1 ? (w-pad*2)/(n-1) : 0;
+  const midY = h/2;
+  let d = series.map((p,i)=>{
+    const x = (pad + i*stepX).toFixed(1);
+    const signedF = p.f * (p.d||1);
+    const y = (midY - (signedF/maxF)*(midY-pad)).toFixed(1);
+    return (i===0?"M":"L") + x + "," + y;
+  }).join(" ");
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <line x1="${pad}" y1="${midY}" x2="${w-pad}" y2="${midY}" stroke="#e1e8f0" stroke-width="1"/>
+    <path d="${d}" fill="none" stroke="#1a6fd6" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+  </svg>`;
+}
+function peakFlow(series){
+  if(!series || !series.length) return null;
+  return Math.max(...series.map(p=>Math.abs(p.f)));
+}
+
+let currentRecords = []; // 目前畫面上的完整資料，供下載使用
+
+function toCSV(series){
+  const rows = [["t_sec","flow_Lmin","direction"]];
+  (series||[]).forEach(p=> rows.push([p.t, p.f, p.d===1?"inhale":p.d===-1?"exhale":"idle"]));
+  return rows.map(r=>r.join(",")).join("\n");
+}
+
+function triggerDownload(content, filename, mime){
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function downloadOne(idx){
+  const r = currentRecords[idx];
+  if(!r || !r.series) return;
+  const csv = toCSV(r.series);
+  const stamp = new Date(r.ts).toISOString().replace(/[:.]/g,"-");
+  triggerDownload(csv, `waveform_${r.name}_${r.game||"na"}_${stamp}.csv`, "text/csv;charset=utf-8");
+}
+
+function downloadAll(){
+  const attempts = currentRecords.filter(r=>r.type==="attempt" && r.series && r.series.length);
+  if(attempts.length===0){ alert("目前沒有波形資料可以匯出"); return; }
+  const payload = {
+    exported_at: new Date().toISOString(),
+    unit_note: "flow 單位為 L/min（裝置聲學流量估計模型輸出）；t 為相對秒數；d：1=吸氣、-1=吐氣",
+    count: attempts.length,
+    attempts,
+  };
+  const stamp = new Date().toISOString().replace(/[:.]/g,"-");
+  triggerDownload(JSON.stringify(payload, null, 2), `breath_waveforms_${stamp}.json`, "application/json;charset=utf-8");
+}
+
+tbody.addEventListener("click", (e)=>{
+  const btn = e.target.closest(".dl-btn");
+  if(!btn) return;
+  downloadOne(parseInt(btn.dataset.idx,10));
+});
+document.getElementById("exportAllBtn").onclick = downloadAll;
+
+function fmtTime(ts){
+  const d = new Date(ts);
+  return d.toLocaleString("zh-TW", { hour12:false });
+}
+
+function authHeader(){
+  const token = sessionStorage.getItem("ib_auth");
+  return token ? { Authorization: "Basic " + token } : {};
+}
+
+async function tryLogin(){
+  const user = loginUser.value.trim();
+  const pass = loginPass.value;
+  loginErr.textContent = "";
+  if(!user || !pass){ loginErr.textContent = "請輸入帳號密碼"; return; }
+  const token = btoa(user + ":" + pass);
+  // 用這組憑證打一次 API 驗證是否正確
+  try{
+    const res = await fetch("/api/view?days=1", { headers: { Authorization: "Basic " + token } });
+    if(res.status === 401){ loginErr.textContent = "帳號或密碼錯誤"; return; }
+    if(!res.ok){ loginErr.textContent = "登入失敗，請稍後再試"; return; }
+    sessionStorage.setItem("ib_auth", token);
+    showApp();
+  }catch(err){
+    loginErr.textContent = "連線失敗: " + err.message;
+  }
+}
+
+function showApp(){
+  loginScreen.style.display = "none";
+  appEl.style.display = "block";
+  load();
+}
+
+function showLogin(){
+  appEl.style.display = "none";
+  loginScreen.style.display = "flex";
+}
+
+loginBtn.onclick = tryLogin;
+loginPass.addEventListener("keydown", e=>{ if(e.key==="Enter") tryLogin(); });
+logoutBtn.onclick = ()=>{ sessionStorage.removeItem("ib_auth"); loginUser.value=""; loginPass.value=""; showLogin(); };
+
+async function load(){
+  msgEl.textContent = "載入中...";
+  tbody.innerHTML = "";
+  bestTbody.innerHTML = "";
+  statCards.innerHTML = "";
+
+  const days = daysEl.value;
+  const name = nameFilterEl.value.trim();
+  const params = new URLSearchParams({ days, best:"1" });
+  if(name) params.set("name", name);
+
+  try{
+    const res = await fetch("/api/view?" + params.toString(), { headers: authHeader() });
+    if(res.status === 401){ showLogin(); return; }
+    if(!res.ok){
+      const err = await res.json().catch(()=>({}));
+      throw new Error(err.message || ("HTTP " + res.status));
+    }
+    const data = await res.json();
+    currentRecords = data.records || [];
+    msgEl.textContent = `共 ${data.count} 筆事件`;
+
+    const uniqueUsers = new Set(data.records.map(r=>r.name)).size;
+    const scoreCount = data.records.filter(r=>r.type==="score").length;
+    const gameStartCount = data.records.filter(r=>r.type==="game_start").length;
+    statCards.innerHTML = `
+      <div class="stat"><div class="num">${data.count}</div><div class="label">總事件數</div></div>
+      <div class="stat"><div class="num">${uniqueUsers}</div><div class="label">使用者數</div></div>
+      <div class="stat"><div class="num">${gameStartCount}</div><div class="label">開始遊戲次數</div></div>
+      <div class="stat"><div class="num">${scoreCount}</div><div class="label">成績紀錄數</div></div>
+    `;
+
+    if(data.records.length === 0){
+      tbody.innerHTML = `<tr><td colspan="8" class="empty">這個區間沒有資料</td></tr>`;
+    } else {
+      tbody.innerHTML = data.records.map((r,idx) => {
+        const isAttempt = r.type === "attempt";
+        const item = isAttempt ? `持續 ${r.duration ?? "-"} 秒` : (r.key || "-");
+        const val = isAttempt ? (peakFlow(r.series) ?? "-") : (r.value ?? "-");
+        const spark = isAttempt ? sparkline(r.series) : "-";
+        const dl = isAttempt ? `<button class="dl-btn" data-idx="${idx}" title="下載此筆波形 CSV">⬇</button>` : "-";
+        return `
+        <tr>
+          <td>${fmtTime(r.ts)}</td>
+          <td>${r.name || "-"}</td>
+          <td><span class="tag ${TYPE_CLASS[r.type]||''}">${TYPE_LABEL[r.type]||r.type}</span></td>
+          <td>${GAME_LABEL[r.game]||r.game||"-"}</td>
+          <td>${item}</td>
+          <td>${val}${isAttempt && val!=="-" ? " L/min (峰值)" : ""}</td>
+          <td>${spark}</td>
+          <td>${dl}</td>
+        </tr>`;
+      }).join("");
+    }
+
+    if(data.best && Object.keys(data.best).length>0){
+      let rows = [];
+      for(const [user, kvs] of Object.entries(data.best)){
+        for(const [k,v] of Object.entries(kvs||{})){
+          rows.push(`<tr><td>${user}</td><td>${k}</td><td>${v}</td></tr>`);
+        }
+      }
+      bestTbody.innerHTML = rows.length ? rows.join("") : `<tr><td colspan="3" class="empty">無資料</td></tr>`;
+    } else {
+      bestTbody.innerHTML = `<tr><td colspan="3" class="empty">無資料</td></tr>`;
+    }
+
+  }catch(err){
+    msgEl.textContent = "載入失敗: " + err.message;
+    console.error(err);
+  }
+}
+
+refreshBtn.onclick = load;
+daysEl.onchange = load;
+nameFilterEl.addEventListener("keydown", e=>{ if(e.key==="Enter") load(); });
+
+// 啟動時：若 sessionStorage 已有憑證就直接進主畫面，否則顯示登入
+if(sessionStorage.getItem("ib_auth")){
+  showApp();
+} else {
+  showLogin();
+}
+</script>
+</body>
+</html>
