@@ -147,7 +147,7 @@ function setSyncStatus(text, isErr=false){ syncStatusEl.textContent = text; sync
 async function uploadLog(payload){
   try{
     const res = await fetch(LOG_ENDPOINT, { method:"POST", headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ name: api.name(), ts: Date.now(), ...payload }) });
+      body: JSON.stringify({ name: api.name(), ts: Date.now(), deviceId: deviceId, ...payload }) });
     if(!res.ok) throw new Error("HTTP " + res.status);
     setSyncStatus("☁ 已同步");
   }catch(err){ console.warn("上傳失敗(不影響遊戲):", err); setSyncStatus("☁ 同步失敗，稍後重試", true); }
@@ -164,8 +164,13 @@ const store = {
 
 // ================= 輸入來源（USB serial / BLE / 觸控）=================
 // 三種來源都把最新的 FFT 存進 lastFFT，下游 analyze() 完全一致。
-let lastFFT=null, lastTs=0;
-function onFFTLine(ln){ const b=parseFFTLine(ln); if(b){ lastFFT=b; lastTs=performance.now()/1000; } }
+let lastFFT=null, lastTs=0, deviceId=null;
+function onFFTLine(ln){
+  // 若行首帶 [ID:xxxxxx]，解析出裝置 ID（韌體會在每行 FFT 前面加）
+  const m = ln.match(/^\[ID:([0-9A-Fa-f]+)\]/);
+  if(m) deviceId = m[1];
+  const b=parseFFTLine(ln); if(b){ lastFFT=b; lastTs=performance.now()/1000; }
+}
 
 // ---- USB (Web Serial) ----
 let port=null, reader=null, keepReadingSerial=false;
