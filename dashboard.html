@@ -137,7 +137,7 @@
       <h2>事件明細 <span style="font-weight:400;color:var(--dim);font-size:12px;">（波形數值單位：L/min，來自裝置聲學流量估計模型）</span></h2>
       <table id="tbl">
         <thead>
-          <tr><th>時間</th><th>使用者</th><th>事件</th><th>遊戲</th><th>項目</th><th>數值</th><th>波形</th><th>下載</th></tr>
+          <tr><th>時間</th><th>裝置</th><th>使用者</th><th>事件</th><th>遊戲</th><th>項目</th><th>數值</th><th>波形</th><th>下載</th></tr>
         </thead>
         <tbody id="tbody"></tbody>
       </table>
@@ -319,7 +319,7 @@ async function load(){
     `;
 
     if(data.records.length === 0){
-      tbody.innerHTML = `<tr><td colspan="8" class="empty">這個區間沒有資料</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" class="empty">這個區間沒有資料</td></tr>`;
     } else {
       tbody.innerHTML = data.records.map((r,idx) => {
         const isAttempt = r.type === "attempt";
@@ -330,6 +330,7 @@ async function load(){
         return `
         <tr>
           <td>${fmtTime(r.ts)}</td>
+          <td>${r.deviceId || "-"}${r.via ? " ("+r.via+")" : ""}</td>
           <td>${r.name || "-"}</td>
           <td><span class="tag ${TYPE_CLASS[r.type]||''}">${TYPE_LABEL[r.type]||r.type}</span></td>
           <td>${GAME_LABEL[r.game]||r.game||"-"}</td>
