@@ -50,31 +50,26 @@
   #syncStatus{font-size:12px;color:var(--dim);opacity:.85;}
   #syncStatus.err{color:var(--red-br);}
 
-  /* 觸控吸/吐按鈕（手機試玩用；沒接裝置時出現）*/
-  #touchpad{position:absolute;left:0;right:0;bottom:0;display:none;
-    padding:12px;gap:12px;justify-content:center;pointer-events:none;}
-  #touchpad.show{display:flex;}
-  .tbtn{pointer-events:auto;flex:1;max-width:220px;height:74px;border-radius:16px;
-    font-size:20px;font-weight:800;color:#2a0a10;box-shadow:0 5px 0 rgba(0,0,0,.3);
-    display:flex;align-items:center;justify-content:center;user-select:none;touch-action:none;}
-  .tbtn:active{transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.3);}
-  #tInhale{background:linear-gradient(160deg,#ffd24a,#ffb03a);}
-  #tExhale{background:linear-gradient(160deg,#ffb0b0,#ff7a6a);}
-
-  /* 手機直式：卡片改為單欄堆疊、頂列緊湊 */
+  /* 手機直式：卡片改為單欄堆疊、頂列緊湊、可捲動 */
   @media (max-width:720px){
-    .bar.top{gap:6px;padding:7px 10px;}
+    html,body{overflow:auto;}
+    #app{height:auto;min-height:100vh;min-height:100dvh;}
+    .bar.top{gap:6px;padding:8px 10px;position:sticky;top:0;z-index:10;}
     .bar.top label{display:none;}
-    #name{width:88px;}
-    #hub{gap:14px;padding:16px;justify-content:flex-start;padding-top:24px;}
+    #name{width:100px;}
+    #wrap{min-height:60vh;}
+    #hub{position:relative;gap:14px;padding:16px;justify-content:flex-start;
+      padding-top:20px;padding-bottom:24px;min-height:auto;}
     #hub p{font-size:14px;}
     #hub h1{font-size:24px;}
     .cards{gap:12px;flex-direction:column;align-items:center;}
-    .card{width:100%;max-width:420px;min-height:0;padding:16px 18px;
+    .card{width:100%;max-width:440px;min-height:0;padding:16px 18px;
       box-shadow:0 4px 0 rgba(0,0,0,.25);}
     .card .big{font-size:22px;}
     .card .desc{font-size:14px;line-height:1.45;}
     .btn-lg{font-size:18px;padding:12px 20px;}
+    canvas{min-height:60vh;}
+    #bottom{position:sticky;bottom:0;z-index:10;}
   }
 </style>
 </head>
@@ -112,12 +107,6 @@
           <div class="desc">跟著長條吸氣、吐氣，顏色就是指令。整條吹好就是「良」。練呼吸節奏。</div>
         </div>
       </div>
-    </div>
-
-    <!-- 觸控試玩按鈕（手機沒接裝置時可用手指玩）-->
-    <div id="touchpad">
-      <div class="tbtn" id="tInhale">吸氣 ▲</div>
-      <div class="tbtn" id="tExhale">吐氣 ▼</div>
     </div>
   </div>
 
@@ -236,20 +225,12 @@ async function disconnectBLE(){
   bleDevice=null; bleChar=null; bleBtn.textContent="藍芽連線"; setStatus("未連線","");
 }
 
-// ---- 觸控 / 鍵盤試玩 ----
+// ---- 鍵盤試玩（電腦除錯用，手機無鍵盤不影響）----
 let upDown=false, dnDown=false, upFlow=0, dnFlow=0;
 addEventListener("keydown", e=>{ if(e.key==="ArrowUp"){upDown=true;e.preventDefault();}
   if(e.key==="ArrowDown"){dnDown=true;e.preventDefault();}
   if(e.code==="Space"){ onPrimary(); e.preventDefault(); } });
 addEventListener("keyup", e=>{ if(e.key==="ArrowUp")upDown=false; if(e.key==="ArrowDown")dnDown=false; });
-
-function bindHold(el, setter){
-  const on=(e)=>{ e.preventDefault(); setter(true); };
-  const off=(e)=>{ e.preventDefault(); setter(false); };
-  el.addEventListener("touchstart",on,{passive:false}); el.addEventListener("touchend",off,{passive:false});
-  el.addEventListener("touchcancel",off,{passive:false});
-  el.addEventListener("mousedown",on); el.addEventListener("mouseup",off); el.addEventListener("mouseleave",off);
-}
 
 // ---------- 取樣即時輸入 ----------
 const EXHALE_BIAS_WINDOW = 0.4;
@@ -310,7 +291,6 @@ function startGame(id){
   current = GAMES[id]; if(!current) return;
   currentId = id;
   hub.style.display="none"; bottom.classList.remove("hide");
-  touchpad.classList.add("show");
   if(current.reset) current.reset(api);
   primary.textContent = current.primaryLabel? (current.primaryLabel()||"") : "";
   primary.style.display = primary.textContent? "" : "none";
@@ -319,7 +299,7 @@ function startGame(id){
   uploadLog({ type:"game_start", game:id });
 }
 function toHub(){ current=null; currentId=null; hub.style.display="flex"; bottom.classList.add("hide");
-  touchpad.classList.remove("show"); segActive=false; segSamples=[]; }
+  segActive=false; segSamples=[]; }
 function onPrimary(){ if(current && current.primary){ current.primary(api);
   if(current.primaryLabel){ const t=current.primaryLabel()||""; primary.textContent=t;
     primary.style.display=t?"":"none"; } } }
@@ -377,15 +357,12 @@ const nameEl=document.getElementById("name");
 const primary=document.getElementById("primary");
 const hub=document.getElementById("hub");
 const bottom=document.getElementById("bottom");
-const touchpad=document.getElementById("touchpad");
 function setStatus(t,cls=""){ statusEl.textContent="● "+t; statusEl.className=cls; }
 bleBtn.onclick=connectBLE;
 usbBtn.onclick=connectSerial;
 document.getElementById("backBtn").onclick=toHub;
 primary.onclick=onPrimary;
 document.querySelectorAll(".card").forEach(c=> c.onclick=()=>startGame(c.dataset.game));
-bindHold(document.getElementById("tInhale"), v=>upDown=v);
-bindHold(document.getElementById("tExhale"), v=>dnDown=v);
 nameEl.value = store.get("name","")||"";
 nameEl.onchange=()=> store.set("name", nameEl.value.trim());
 
