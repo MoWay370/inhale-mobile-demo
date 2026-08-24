@@ -54,12 +54,16 @@
   @media (max-width:720px){
     html,body{overflow:auto;}
     #app{height:auto;min-height:100vh;min-height:100dvh;}
-    .bar.top{gap:6px;padding:8px 10px;position:sticky;top:0;z-index:10;}
+    .bar.top{gap:6px;padding:8px 10px;position:sticky;top:0;z-index:30;}
     .bar.top label{display:none;}
-    #name{width:100px;}
-    #wrap{min-height:60vh;}
-    #hub{position:relative;gap:14px;padding:16px;justify-content:flex-start;
-      padding-top:20px;padding-bottom:24px;min-height:auto;}
+    .bar.top .spacer{display:none;}
+    #name{width:100%;order:5;margin-top:2px;}
+    #syncStatus{order:4;}
+    #wrap{min-height:70vh;position:relative;}
+    /* canvas 只當背景，選單畫面時 hub 疊在上面且不透明，確保卡片看得到、點得到 */
+    canvas{position:absolute;inset:0;height:100%;}
+    #hub{position:relative;z-index:20;gap:14px;padding:16px;justify-content:flex-start;
+      padding-top:20px;padding-bottom:24px;min-height:70vh;background:var(--bg);}
     #hub p{font-size:14px;}
     #hub h1{font-size:24px;}
     .cards{gap:12px;flex-direction:column;align-items:center;}
@@ -68,8 +72,7 @@
     .card .big{font-size:22px;}
     .card .desc{font-size:14px;line-height:1.45;}
     .btn-lg{font-size:18px;padding:12px 20px;}
-    canvas{min-height:60vh;}
-    #bottom{position:sticky;bottom:0;z-index:10;}
+    #bottom{position:sticky;bottom:0;z-index:30;}
   }
 </style>
 </head>
