@@ -89,7 +89,7 @@
   <div class="bar top">
     <button id="bleBtn" class="btn-blue btn-md">藍芽連線</button>
     <button id="usbBtn" class="btn-gold btn-md">USB 連線</button>
-    <span id="ver" style="font-size:12px;color:#ffd24a;font-weight:800;background:#2c0910;padding:3px 8px;border-radius:6px;">v4</span>
+    <span id="ver" style="font-size:12px;color:#ffd24a;font-weight:800;background:#2c0910;padding:3px 8px;border-radius:6px;">v5</span>
     <span id="status">未連線</span>
     <span class="spacer"></span>
     <span id="syncStatus"></span>
@@ -227,12 +227,14 @@ function onBLEData(e){
   const dec = new TextDecoder();
   const chunk = dec.decode(e.target.value);
   bleRawCount++;
-  bleLastRaw = chunk.slice(0, 40);
-  // 除錯：把收到的原始資料顯示在狀態列
-  setStatus(`藍芽收到 ${bleRawCount} 包｜${bleLastRaw}`, "on");
   bleBuf += chunk;
   let i;
   while((i=bleBuf.indexOf("\n"))>=0){ const ln=bleBuf.slice(0,i).trim(); bleBuf=bleBuf.slice(i+1); onFFTLine(ln); }
+  // 除錯：顯示解析後的結果，確認資料有沒有變成有效氣流
+  if(lastFFT){
+    const a = analyze(lastFFT);
+    setStatus(`收${bleRawCount}｜active:${a.active}｜flow:${Math.round(a.flow||0)}｜${a.direction||"-"}`, "on");
+  }
 }
 function onBLEDrop(){ setStatus("藍芽已斷線","warn"); bleBtn.textContent="藍芽連線"; bleDevice=null; bleChar=null;
   uploadLog({ type:"disconnect", via:"ble" }); }
