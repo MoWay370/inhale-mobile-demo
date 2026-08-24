@@ -51,7 +51,7 @@
   #syncStatus.err{color:var(--red-br);}
 
   /* 手機直式：選單畫面隱藏 canvas，只顯示可捲動的卡片，徹底避免疊層遮蔽 */
-  @media (max-width:720px){
+  @media (max-width:1024px){
     html,body{overflow:auto;height:auto;}
     #app{height:auto;min-height:100vh;min-height:100dvh;}
     .bar.top{gap:6px;padding:8px 10px;position:sticky;top:0;z-index:30;}
@@ -89,6 +89,7 @@
   <div class="bar top">
     <button id="bleBtn" class="btn-blue btn-md">藍芽連線</button>
     <button id="usbBtn" class="btn-gold btn-md">USB 連線</button>
+    <span id="ver" style="font-size:12px;color:#ffd24a;font-weight:800;background:#2c0910;padding:3px 8px;border-radius:6px;">v3</span>
     <span id="status">未連線</span>
     <span class="spacer"></span>
     <span id="syncStatus"></span>
@@ -303,6 +304,7 @@ function startGame(id){
   currentId = id;
   hub.style.display="none"; bottom.classList.remove("hide");
   document.body.classList.remove("on-hub"); document.body.classList.add("on-game");
+  cv.style.display="block";
   if(current.reset) current.reset(api);
   primary.textContent = current.primaryLabel? (current.primaryLabel()||"") : "";
   primary.style.display = primary.textContent? "" : "none";
@@ -312,6 +314,7 @@ function startGame(id){
 }
 function toHub(){ current=null; currentId=null; hub.style.display="flex"; bottom.classList.add("hide");
   document.body.classList.remove("on-game"); document.body.classList.add("on-hub");
+  cv.style.display="none";
   segActive=false; segSamples=[]; }
 function onPrimary(){ if(current && current.primary){ current.primary(api);
   if(current.primaryLabel){ const t=current.primaryLabel()||""; primary.textContent=t;
@@ -382,6 +385,7 @@ nameEl.onchange=()=> store.set("name", nameEl.value.trim());
 // 手機沒有 Web Serial 時，隱藏 USB 按鈕，主推藍芽
 if(!("serial" in navigator)) usbBtn.style.display="none";
 document.body.classList.add("on-hub");   // 初始為選單畫面
+cv.style.display="none";                  // 選單時 canvas 隱藏，不遮住卡片
 setStatus(`未連線 · ${algoStatus()}`,"");
 
 resize(); loop();
