@@ -50,20 +50,28 @@
   #syncStatus{font-size:12px;color:var(--dim);opacity:.85;}
   #syncStatus.err{color:var(--red-br);}
 
-  /* 手機直式：卡片改為單欄堆疊、頂列緊湊、可捲動 */
+  /* 手機直式：選單畫面隱藏 canvas，只顯示可捲動的卡片，徹底避免疊層遮蔽 */
   @media (max-width:720px){
-    html,body{overflow:auto;}
+    html,body{overflow:auto;height:auto;}
     #app{height:auto;min-height:100vh;min-height:100dvh;}
     .bar.top{gap:6px;padding:8px 10px;position:sticky;top:0;z-index:30;}
     .bar.top label{display:none;}
     .bar.top .spacer{display:none;}
     #name{width:100%;order:5;margin-top:2px;}
     #syncStatus{order:4;}
-    #wrap{min-height:70vh;position:relative;}
-    /* canvas 只當背景，選單畫面時 hub 疊在上面且不透明，確保卡片看得到、點得到 */
-    canvas{position:absolute;inset:0;height:100%;}
-    #hub{position:relative;z-index:20;gap:14px;padding:16px;justify-content:flex-start;
-      padding-top:20px;padding-bottom:24px;min-height:70vh;background:var(--bg);}
+
+    #wrap{min-height:0;overflow:visible;}
+
+    /* 選單畫面（body 有 .on-hub）：canvas 收起，hub 用正常文件流顯示 */
+    body.on-hub canvas{display:none;}
+    body.on-hub #hub{position:static;min-height:auto;}
+
+    /* 遊戲畫面（body 有 .on-game）：canvas 撐滿一個固定高度 */
+    body.on-game canvas{position:relative;width:100%;height:70vh;display:block;}
+    body.on-game #hub{display:none;}
+
+    #hub{gap:14px;padding:16px;justify-content:flex-start;
+      padding-top:20px;padding-bottom:24px;background:var(--bg);}
     #hub p{font-size:14px;}
     #hub h1{font-size:24px;}
     .cards{gap:12px;flex-direction:column;align-items:center;}
@@ -294,6 +302,7 @@ function startGame(id){
   current = GAMES[id]; if(!current) return;
   currentId = id;
   hub.style.display="none"; bottom.classList.remove("hide");
+  document.body.classList.remove("on-hub"); document.body.classList.add("on-game");
   if(current.reset) current.reset(api);
   primary.textContent = current.primaryLabel? (current.primaryLabel()||"") : "";
   primary.style.display = primary.textContent? "" : "none";
@@ -302,6 +311,7 @@ function startGame(id){
   uploadLog({ type:"game_start", game:id });
 }
 function toHub(){ current=null; currentId=null; hub.style.display="flex"; bottom.classList.add("hide");
+  document.body.classList.remove("on-game"); document.body.classList.add("on-hub");
   segActive=false; segSamples=[]; }
 function onPrimary(){ if(current && current.primary){ current.primary(api);
   if(current.primaryLabel){ const t=current.primaryLabel()||""; primary.textContent=t;
@@ -371,6 +381,7 @@ nameEl.onchange=()=> store.set("name", nameEl.value.trim());
 
 // 手機沒有 Web Serial 時，隱藏 USB 按鈕，主推藍芽
 if(!("serial" in navigator)) usbBtn.style.display="none";
+document.body.classList.add("on-hub");   // 初始為選單畫面
 setStatus(`未連線 · ${algoStatus()}`,"");
 
 resize(); loop();
