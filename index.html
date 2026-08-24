@@ -89,7 +89,7 @@
   <div class="bar top">
     <button id="bleBtn" class="btn-blue btn-md">藍芽連線</button>
     <button id="usbBtn" class="btn-gold btn-md">USB 連線</button>
-    <span id="ver" style="font-size:12px;color:#ffd24a;font-weight:800;background:#2c0910;padding:3px 8px;border-radius:6px;">v3</span>
+    <span id="ver" style="font-size:12px;color:#ffd24a;font-weight:800;background:#2c0910;padding:3px 8px;border-radius:6px;">v4</span>
     <span id="status">未連線</span>
     <span class="spacer"></span>
     <span id="syncStatus"></span>
@@ -201,7 +201,7 @@ async function serialLoop(){
 // ---- 藍芽 (Web Bluetooth, Nordic UART Service) ----
 const NUS_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 const NUS_TX      = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // 裝置->手機 notify
-let bleDevice=null, bleChar=null, bleBuf="";
+let bleDevice=null, bleChar=null, bleBuf="", bleRawCount=0, bleLastRaw="";
 async function connectBLE(){
   if(bleDevice){ await disconnectBLE(); return; }
   if(!("bluetooth" in navigator)){ setStatus("此瀏覽器不支援藍芽，Android 請用 Chrome","warn"); return; }
@@ -225,7 +225,12 @@ async function connectBLE(){
 }
 function onBLEData(e){
   const dec = new TextDecoder();
-  bleBuf += dec.decode(e.target.value);
+  const chunk = dec.decode(e.target.value);
+  bleRawCount++;
+  bleLastRaw = chunk.slice(0, 40);
+  // 除錯：把收到的原始資料顯示在狀態列
+  setStatus(`藍芽收到 ${bleRawCount} 包｜${bleLastRaw}`, "on");
+  bleBuf += chunk;
   let i;
   while((i=bleBuf.indexOf("\n"))>=0){ const ln=bleBuf.slice(0,i).trim(); bleBuf=bleBuf.slice(i+1); onFFTLine(ln); }
 }
