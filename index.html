@@ -92,7 +92,6 @@
   <div class="bar top">
     <button id="bleBtn" class="btn-blue btn-md">藍芽連線</button>
     <button id="usbBtn" class="btn-gold btn-md">USB 連線</button>
-    <span id="ver" style="font-size:12px;color:#ffd24a;font-weight:800;background:#2c0910;padding:3px 8px;border-radius:6px;">v8</span>
     <span id="status">未連線</span>
     <span class="spacer"></span>
     <span id="syncStatus"></span>
@@ -222,7 +221,7 @@ async function serialLoop(){
 // ---- 藍芽 (Web Bluetooth, Nordic UART Service) ----
 const NUS_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 const NUS_TX      = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // 裝置->手機 notify
-let bleDevice=null, bleChar=null, bleBuf="", bleRawCount=0, bleLastRaw="";
+let bleDevice=null, bleChar=null, bleBuf="";
 async function connectBLE(){
   if(bleDevice){ await disconnectBLE(); return; }
   if(!("bluetooth" in navigator)){ setStatus("此瀏覽器不支援藍芽，Android 請用 Chrome","warn"); return; }
@@ -250,13 +249,6 @@ function onBLEData(e){
   bleBuf += chunk;
   let i;
   while((i=bleBuf.indexOf("\n"))>=0){ const ln=bleBuf.slice(0,i).trim(); bleBuf=bleBuf.slice(i+1); onFFTLine(ln); }
-  // 輕量除錯：顯示最新解析結果，確認資料流正常（可日後移除）
-  bleRawCount++;
-  if(lastFFT && (bleRawCount % 5 === 0)){
-    const a = analyze(lastFFT);
-    statusEl.textContent = `藍芽 flow:${Math.round(a.flow||0)} ${a.direction||"-"} (${deviceId||"?"})`;
-    statusEl.className = "on";
-  }
 }
 function onBLEDrop(){ setStatus("藍芽已斷線","warn"); bleBtn.textContent="藍芽連線"; bleDevice=null; bleChar=null;
   uploadLog({ type:"disconnect", via:"ble" }); }
@@ -415,7 +407,7 @@ nameEl.onchange=()=> store.set("name", nameEl.value.trim());
 if(!("serial" in navigator)) usbBtn.style.display="none";
 document.body.classList.add("on-hub");   // 初始為選單畫面
 cv.style.display="none";                  // 選單時 canvas 隱藏，不遮住卡片
-setStatus(`未連線 · ${algoStatus()}`,"");
+setStatus("未連線","");
 
 resize(); loop();
 </script>
