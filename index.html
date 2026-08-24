@@ -89,7 +89,7 @@
   <div class="bar top">
     <button id="bleBtn" class="btn-blue btn-md">藍芽連線</button>
     <button id="usbBtn" class="btn-gold btn-md">USB 連線</button>
-    <span id="ver" style="font-size:12px;color:#ffd24a;font-weight:800;background:#2c0910;padding:3px 8px;border-radius:6px;">v6</span>
+    <span id="ver" style="font-size:12px;color:#ffd24a;font-weight:800;background:#2c0910;padding:3px 8px;border-radius:6px;">v7</span>
     <span id="status">未連線</span>
     <span class="spacer"></span>
     <span id="syncStatus"></span>
@@ -167,7 +167,25 @@ const store = {
 // 三種來源都把最新的 FFT 存進 lastFFT，下游 analyze() 完全一致。
 let lastFFT=null, lastTs=0, deviceId=null;
 function onFFTLine(ln){
-  // 若行首帶 [ID:xxxxxx]，解析出裝置 ID（韌體會在每行 FFT 前面加）
+  // 新精簡格式：D<裝置ID>,v1,v2,...,v20  （例如 D25754C,40678,8377,...,666）
+  if(ln.charAt(0)==="D" && ln.indexOf(",")>0){
+    const parts = ln.split(",");
+    const idAndFirst = parts[0];        // "D25754C"
+    deviceId = idAndFirst.slice(1);     // 去掉開頭的 D
+    // parts[1..20] 是 20 個頻帶值
+    if(parts.length>=21){
+      const bands = {};
+      let ok = true;
+      for(let k=1;k<=20;k++){
+        const v = parseFloat(parts[k]);
+        if(Number.isNaN(v)){ ok=false; break; }
+        bands[k] = v;
+      }
+      if(ok){ lastFFT = bands; lastTs = performance.now()/1000; return; }
+    }
+    return; // D 開頭但不完整（分包半截），丟棄等下一筆完整的
+  }
+  // 舊格式相容：[ID:xxxxxx][FFT] 1k:.. | ...
   const m = ln.match(/^\[ID:([0-9A-Fa-f]+)\]/);
   if(m) deviceId = m[1];
   const b=parseFFTLine(ln); if(b){ lastFFT=b; lastTs=performance.now()/1000; }
@@ -226,20 +244,16 @@ async function connectBLE(){
 function onBLEData(e){
   const dec = new TextDecoder();
   const chunk = dec.decode(e.target.value);
-  bleRawCount++;
   bleBuf += chunk;
-  let i, gotLine=false;
-  while((i=bleBuf.indexOf("\n"))>=0){ const ln=bleBuf.slice(0,i).trim(); bleBuf=bleBuf.slice(i+1); onFFTLine(ln); gotLine=true; }
-  // 除錯：無條件顯示，確保一定看得到狀態
-  let dbg = `收${bleRawCount}`;
-  if(lastFFT){
+  let i;
+  while((i=bleBuf.indexOf("\n"))>=0){ const ln=bleBuf.slice(0,i).trim(); bleBuf=bleBuf.slice(i+1); onFFTLine(ln); }
+  // 輕量除錯：顯示最新解析結果，確認資料流正常（可日後移除）
+  bleRawCount++;
+  if(lastFFT && (bleRawCount % 5 === 0)){
     const a = analyze(lastFFT);
-    dbg += `｜active:${a.active}｜flow:${Math.round(a.flow||0)}｜${a.direction||"-"}`;
-  } else {
-    dbg += `｜未解析出FFT｜原始:${chunk.slice(0,30)}`;
+    statusEl.textContent = `藍芽 flow:${Math.round(a.flow||0)} ${a.direction||"-"} (${deviceId||"?"})`;
+    statusEl.className = "on";
   }
-  statusEl.textContent = dbg;
-  statusEl.className = "on";
 }
 function onBLEDrop(){ setStatus("藍芽已斷線","warn"); bleBtn.textContent="藍芽連線"; bleDevice=null; bleChar=null;
   uploadLog({ type:"disconnect", via:"ble" }); }
