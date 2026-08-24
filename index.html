@@ -67,8 +67,11 @@
     body.on-hub #hub{position:static;min-height:auto;}
 
     /* 遊戲畫面（body 有 .on-game）：canvas 撐滿一個固定高度 */
-    body.on-game canvas{position:relative;width:100%;height:70vh;display:block;}
+    body.on-game canvas{position:relative;width:100%;height:58vh;display:block;}
     body.on-game #hub{display:none;}
+    body.on-game #wrap{min-height:0;padding-bottom:64px;}
+    /* 底部返回/主要按鈕固定在畫面最底，永遠按得到 */
+    body.on-game #bottom{position:fixed;left:0;right:0;bottom:0;z-index:40;}
 
     #hub{gap:14px;padding:16px;justify-content:flex-start;
       padding-top:20px;padding-bottom:24px;background:var(--bg);}
@@ -89,7 +92,7 @@
   <div class="bar top">
     <button id="bleBtn" class="btn-blue btn-md">藍芽連線</button>
     <button id="usbBtn" class="btn-gold btn-md">USB 連線</button>
-    <span id="ver" style="font-size:12px;color:#ffd24a;font-weight:800;background:#2c0910;padding:3px 8px;border-radius:6px;">v7</span>
+    <span id="ver" style="font-size:12px;color:#ffd24a;font-weight:800;background:#2c0910;padding:3px 8px;border-radius:6px;">v8</span>
     <span id="status">未連線</span>
     <span class="spacer"></span>
     <span id="syncStatus"></span>
