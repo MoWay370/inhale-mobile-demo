@@ -58,8 +58,7 @@
 
 <main>
   <div class="controls">
-    <button id="bleBtn" class="btn-accent">藍芽連線</button>
-    <button id="usbBtn" class="btn-light">USB 連線</button>
+    <button id="usbBtn" class="btn-accent">USB 連線</button>
     <span id="status">未連線</span>
     <span class="spacer"></span>
     <label>受測者 ID</label>
@@ -96,8 +95,9 @@
   </div>
 </main>
 
-<script type="module">
-import { analyze, parseFFTLine } from "./breath_algorithm.js";
+<script>
+// 肺部沉積率：流速直接用裝置臨床級 Est（[DETECT] 行），
+// 不依賴 breath_algorithm.js，本頁獨立運作。
 
 // ========= 參數（對應 Python）=========
 const IDEAL_FLOW = [0,70,70,60,30,20,5,0,0,0];
@@ -117,41 +117,48 @@ function computeBudld(tr,qp,v){ return B0+BTR*tr+BQP*qp+BV*v; }
 // ========= 狀態 =========
 let deviceId=null, measuring=false, started=false, t0=null;
 let times=[], flows=[];
-let lastFFT=null, lastTs=0;
+
 let prevFlowYes=false, windowHist=[false,false,false];
 
-// ========= 輸入解析（新精簡格式 D<id>,... + 舊格式相容）=========
+// ========= 輸入解析 =========
+// 肺部沉積率用「裝置自己算的臨床級流速 Est」（在 [DETECT] 行），
+// 跟 Python 版一致。D<id>,... 行只用來取裝置 ID。
+const FLOW_RE=/Flow\s*=\s*(YES|no)/i;
+const EST_RE=/Est\s*=\s*([-+]?\d*\.?\d+)/;
+const LOWE_RE=/LowEnergy\s*=\s*([-+]?\d+)/;
+
 function onLine(ln){
+  // FFT 精簡行：只取裝置 ID（流速不從這裡拿）
   if(ln.charAt(0)==="D" && ln.indexOf(",")>0){
     const parts=ln.split(",");
-    deviceId=parts[0].slice(1);
-    deviceLabel.textContent="裝置: "+deviceId;
-    if(parts.length>=21){
-      const bands={}; let ok=true;
-      for(let k=1;k<=20;k++){ const v=parseFloat(parts[k]); if(Number.isNaN(v)){ok=false;break;} bands[k]=v; }
-      if(ok){ lastFFT=bands; lastTs=performance.now()/1000; handleSample(bands); }
-    }
+    const id=parts[0].slice(1);
+    if(id && id!==deviceId){ deviceId=id; deviceLabel.textContent="裝置: "+deviceId; }
     return;
   }
-  const b=parseFFTLine(ln);
-  if(b){ lastFFT=b; lastTs=performance.now()/1000; handleSample(b); }
+  // DETECT 行：拿 Flow / Est / LowEnergy（裝置臨床級流速）
+  if(ln.indexOf("[DETECT]")>=0){
+    const mFlow=ln.match(FLOW_RE); if(!mFlow) return;
+    const flowYes=(mFlow[1].toUpperCase()==="YES");
+    let est=0; const mEst=ln.match(EST_RE); if(mEst) est=parseFloat(mEst[1])||0;
+    let lowE=0; const mLow=ln.match(LOWE_RE); if(mLow) lowE=parseInt(mLow[1],10)||0;
+    handleDetect(flowYes, est, lowE);
+    return;
+  }
 }
 
-// ========= 每筆 FFT 進來的處理（對應 Python _handle_line）=========
-function handleSample(bands){
+// ========= 每筆 DETECT 的處理（對應 Python _handle_line）=========
+function handleDetect(flowYes, est, lowE){
   if(!measuring) return;
-  const a = analyze(bands);
-  let est = a.active ? a.flow : 0;
-  // 只取吸氣（跟 Python 一樣，吸入評估）
-  const flowYes = a.active && a.direction==="inhalation";
 
-  // 滑動視窗多數決
-  windowHist.shift();
-  windowHist.push(flowYes);
+  // 滑動視窗多數決（3 取 2）
+  let candidate = flowYes || (lowE>800000 && est>0);
+  windowHist.shift(); windowHist.push(candidate);
   const trueCount = windowHist.filter(x=>x).length;
   let useYes, useEst;
-  if(trueCount>=2){ useYes=true; useEst=est; }
-  else { useYes=false; useEst=0; }
+  if(trueCount>=2){
+    useYes=true; useEst=est;
+    if(est===0 && lowE>1000000) useEst=15;   // 爬升期補基本流速，避免線掉下去
+  } else { useYes=false; useEst=0; }
 
   // 氣流校正
   useEst = calibrateFlow(useEst);
@@ -322,15 +329,12 @@ function drawLung(frac){
   lctx.fillText((frac*100).toFixed(0)+"%", mapX(96), mapY(level));
 }
 
-// ========= 連線：USB + BLE（跟遊戲頁一致）=========
-const NUS_SERVICE="6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-const NUS_TX="6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+// ========= 連線：只用 USB =========
 let port=null, reader=null, keepSerial=false;
-let bleDevice=null, bleChar=null, bleBuf="";
 
 async function connectSerial(){
   if(port){ await disconnectSerial(); return; }
-  if(!("serial" in navigator)){ setStatus("此裝置不支援 USB，手機請用藍芽","warn"); return; }
+  if(!("serial" in navigator)){ setStatus("此瀏覽器不支援 USB，請用電腦版 Chrome/Edge","warn"); return; }
   try{ port=await navigator.serial.requestPort(); await port.open({baudRate:115200}); }
   catch{ setStatus("未選擇 USB 裝置","warn"); port=null; return; }
   usbBtn.textContent="USB 斷線"; setStatus("USB 已連線","on"); keepSerial=true; serialLoop();
@@ -348,42 +352,14 @@ async function serialLoop(){
     buf+=r.value; let i;
     while((i=buf.indexOf("\n"))>=0){ const ln=buf.slice(0,i).trim(); buf=buf.slice(i+1); onLine(ln); } }
 }
-async function connectBLE(){
-  if(bleDevice){ await disconnectBLE(); return; }
-  if(!("bluetooth" in navigator)){ setStatus("此瀏覽器不支援藍芽，Android 請用 Chrome","warn"); return; }
-  try{
-    bleDevice=await navigator.bluetooth.requestDevice({
-      filters:[{name:"SmartInhaler"},{services:[NUS_SERVICE]}], optionalServices:[NUS_SERVICE] });
-    bleDevice.addEventListener("gattserverdisconnected", ()=>{ setStatus("藍芽已斷線","warn"); bleBtn.textContent="藍芽連線"; bleDevice=null; });
-    const server=await bleDevice.gatt.connect();
-    const service=await server.getPrimaryService(NUS_SERVICE);
-    bleChar=await service.getCharacteristic(NUS_TX);
-    await bleChar.startNotifications();
-    bleChar.addEventListener("characteristicvaluechanged", onBLEData);
-    bleBtn.textContent="藍芽斷線"; setStatus("藍芽已連線","on");
-  }catch(err){ setStatus("藍芽未連線 / 已取消","warn"); bleDevice=null; bleChar=null; }
-}
-function onBLEData(e){
-  bleBuf += new TextDecoder().decode(e.target.value);
-  let i;
-  while((i=bleBuf.indexOf("\n"))>=0){ const ln=bleBuf.slice(0,i).trim(); bleBuf=bleBuf.slice(i+1); onLine(ln); }
-}
-async function disconnectBLE(){
-  try{ if(bleChar) await bleChar.stopNotifications(); }catch{}
-  try{ if(bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect(); }catch{}
-  bleDevice=null; bleChar=null; bleBtn.textContent="藍芽連線"; setStatus("未連線","");
-}
 
 // ========= 綁定 =========
-const bleBtn=document.getElementById("bleBtn");
 const usbBtn=document.getElementById("usbBtn");
 const statusEl=document.getElementById("status");
 const deviceLabel=document.getElementById("deviceLabel");
 const peak=document.getElementById("peak");
 function setStatus(t,c=""){ statusEl.textContent="● "+t; statusEl.className=c; }
-bleBtn.onclick=connectBLE;
 usbBtn.onclick=connectSerial;
-if(!("serial" in navigator)) usbBtn.style.display="none";
 
 document.getElementById("startBtn").onclick=()=>{
   measuring=!measuring;
