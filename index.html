@@ -172,7 +172,18 @@ const store = {
 // 三種來源都把最新的 FFT 存進 lastFFT，下游 analyze() 完全一致。
 let lastFFT=null, lastTs=0, deviceId=null;
 function onFFTLine(ln){
-  // 若行首帶 [ID:xxxxxx]，解析出裝置 ID（韌體會在每行 FFT 前面加）
+  // 新精簡格式：D<裝置ID>,v1,v2,...,v20  （例如 D25754C,40678,8377,...,666）
+  if(ln.charAt(0)==="D" && ln.indexOf(",")>0){
+    const parts = ln.split(",");
+    deviceId = parts[0].slice(1);   // 去掉開頭的 D
+    if(parts.length>=21){
+      const bands = {}; let ok = true;
+      for(let k=1;k<=20;k++){ const v=parseFloat(parts[k]); if(Number.isNaN(v)){ ok=false; break; } bands[k]=v; }
+      if(ok){ lastFFT=bands; lastTs=performance.now()/1000; }
+    }
+    return;
+  }
+  // 舊格式相容：[ID:xxxxxx][FFT] 1k:.. | ...
   const m = ln.match(/^\[ID:([0-9A-Fa-f]+)\]/);
   if(m) deviceId = m[1];
   const b=parseFFTLine(ln); if(b){ lastFFT=b; lastTs=performance.now()/1000; }
