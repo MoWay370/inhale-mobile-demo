@@ -9,11 +9,10 @@ const P = {
   BIG_THRESH: 0.85,     // 力道 >= 這個比例,算「夠大」,城牆才會倒
   GROUND_Y_RATIO: 0.82,
   WALL: { xr: 0.80, halfW: 34, heightRatio: 0.30, pts: 50 },
-  // 三種固定動畫的參數:飛行時間、終點位置、拋物線頂點位置(都用畫面比例表示)
   ANIM: {
     small:  { dur: 0.55, endXR: 0.26, apexXR: 0.16, apexYRatio: 0.10 },
     medium: { dur: 0.85, endXR: 0.50, apexXR: 0.32, apexYRatio: 0.20 },
-    big:    { dur: 1.10, endXR: 0.80, apexXR: 0.48, apexYRatio: 0.34 }, // 終點就是城牆位置
+    big:    { dur: 1.10, endXR: 0.80, apexXR: 0.48, apexYRatio: 0.34 },
   },
 };
 
@@ -21,10 +20,10 @@ let S;
 
 function reset(api){
   S = {
-    phase: "aim",            // aim(等待吸氣) -> flight(播放固定動畫) -> result(結算,等按鈕)
+    phase: "aim",
     peak: 0,
     power: 0,
-    tier: null,               // "small" / "medium" / "big"
+    tier: null,
     animT: 0,
     wrong: false,
     liveFlow: 0,
@@ -32,6 +31,7 @@ function reset(api){
     round: 1,
     score: api.store.get("angrybird_score", 0),
     best: api.store.get("angrybird_best", 0),
+    lastPeak: 0,          // 上一發的吸氣峰值（L/min），顯示用
     wallBroken: false,
     rubble: [],
     msg: "深吸一口氣，用最大的力氣打倒城牆！",
@@ -39,15 +39,19 @@ function reset(api){
     shake: 0,
   };
 }
+
+// 「再射一次」永遠顯示、永遠可按
 function primaryLabel(){
-  return S.phase==="result" ? "再射一次" : "";
+  return "再射一次";
 }
+
+// 任何階段被點都直接重置成 aim，開始新的一發
 function primary(api){
-  if(S.phase!=="result") return;
   S.phase="aim"; S.peak=0; S.power=0; S.tier=null; S.animT=0; S.trail=[]; S.rubble=[];
   S.msg="深吸一口氣，用最大的力氣打倒城牆！"; S.msgCol=api.colors.cream;
   S.round += 1;
-  if(S.wallBroken) S.wallBroken=false; // 重新蓋一面牆
+  S.wallBroken=false; // 重新蓋一面牆
+  S.shake=0;
 }
 
 function tierOf(power){
@@ -59,12 +63,12 @@ function tierOf(power){
 function launch(api){
   S.power = Math.max(0, Math.min(1, S.peak / P.REF_MAX));
   S.tier = tierOf(S.power);
+  S.lastPeak = S.peak;   // 記住這一發的峰值，結算時顯示
   S.animT = 0;
   S.phase = "flight";
   S.trail = [];
 }
 
-// 二次貝茲曲線,算固定動畫路徑上某個進度 t(0~1) 的座標
 function bezierPoint(p0, p1, p2, t){
   const u = 1-t;
   return {
@@ -79,7 +83,7 @@ function update(dt, input, api){
   if(S.phase==="aim"){
     if(input.direction==="inhalation" && input.flow>P.ONSET){
       S.liveFlow = input.flow;
-      S.peak = Math.max(S.peak, input.flow); // 只記錄這口氣的最高瞬間值,不做時間累積
+      S.peak = Math.max(S.peak, input.flow);
       const pct = Math.round(Math.min(1,S.peak/P.REF_MAX)*100);
       S.msg = pct<40? "吸氣中…用最大的力氣吸！" : pct<85? "快到了！再吸大力一點！" : "力道足夠了！鬆口氣發射！";
       S.msgCol = api.colors.gold;
@@ -99,7 +103,7 @@ function update(dt, input, api){
 
     S.animT += dt;
     const t = Math.min(1, S.animT / cfg.dur);
-    const eased = 1-(1-t)*(1-t); // ease-out,飛行前段快、後段緩,看起來比較自然
+    const eased = 1-(1-t)*(1-t);
 
     const p0 = { x: w*0.12, y: groundY-70 };
     const p1 = { x: w*cfg.apexXR, y: groundY - h*cfg.apexYRatio };
@@ -189,7 +193,6 @@ function render(g,w,h,api){
     g.ctx.globalAlpha=1;
   }
 
-  // 力道條(吸氣中即時顯示目前這口氣抓到的peak,三個等級用刻度標示)
   if(S.phase==="aim"){
     const barX=slingX, barTop=slingY-90, barBot=slingY-10;
     g.rrect(barX-14,barTop,barX+14,barBot,8); g.fill(C.track); g.stroke(C.goldDk,2);
@@ -218,8 +221,16 @@ function render(g,w,h,api){
 
   g.text(S.msg, w/2, 78, Math.min(22,w*0.028), S.msgCol);
   if(S.wrong) g.text("記得是「吸氣」喔～", w/2, 108, 15, C.gold);
+
+  // 結算階段：畫面中央顯示這一發的吸氣峰值 + 提示
+  if(S.phase==="result"){
+    const cx=w/2, cy=h*0.42;
+    g.text("本次吸氣峰值", cx, cy-34, Math.min(18,w*0.024), C.dim);
+    g.text(`${Math.round(S.lastPeak)} L/min`, cx, cy+6, Math.min(46,w*0.07), C.gold);
+    g.text("按下方「再射一次」繼續", cx, cy+48, Math.min(16,w*0.022), C.cream);
+  }
+
   if(S.phase==="aim") g.text(`目前力道 ${Math.round(Math.min(1,S.peak/P.REF_MAX)*100)}%　（需要 ${Math.round(P.BIG_THRESH*100)}% 以上）`, w/2, h-18, 15, C.cream);
-  if(S.phase==="result") g.text("按「再射一次」繼續", w/2, h-18, 15, C.dim, "center", false);
   g.text(`個人最高單發 ${S.best} 分`, 18, h-14, 13, C.dim, "left", false);
 }
 
