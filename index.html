@@ -67,11 +67,13 @@
     body.on-hub #hub{position:static;min-height:auto;}
 
     /* 遊戲畫面（body 有 .on-game）：canvas 撐滿一個固定高度 */
-    body.on-game canvas{position:relative;width:100%;height:58vh;display:block;}
+    body.on-game canvas{position:relative;width:100%;height:62vh;display:block;}
     body.on-game #hub{display:none;}
-    body.on-game #wrap{min-height:0;padding-bottom:64px;}
-    /* 底部返回/主要按鈕固定在畫面最底，永遠按得到 */
-    body.on-game #bottom{position:fixed;left:0;right:0;bottom:0;z-index:40;}
+    body.on-game #wrap{padding-bottom:72px;}
+    /* 底部按鈕固定貼在螢幕最底，永遠看得到、按得到 */
+    body.on-game #bottom{position:fixed;left:0;right:0;bottom:0;z-index:50;
+      box-shadow:0 -2px 12px rgba(0,0,0,.35);}
+    body.on-game #primary{min-width:150px;}
 
     #hub{gap:14px;padding:16px;justify-content:flex-start;
       padding-top:20px;padding-bottom:24px;background:var(--bg);}
@@ -92,6 +94,7 @@
   <div class="bar top">
     <button id="bleBtn" class="btn-blue btn-md">藍芽連線</button>
     <button id="usbBtn" class="btn-gold btn-md">USB 連線</button>
+    <span id="ver" style="font-size:12px;color:#ffd24a;font-weight:800;background:#2c0910;padding:3px 8px;border-radius:6px;">v4</span>
     <span id="status">未連線</span>
     <span class="spacer"></span>
     <span id="syncStatus"></span>
@@ -169,25 +172,7 @@ const store = {
 // 三種來源都把最新的 FFT 存進 lastFFT，下游 analyze() 完全一致。
 let lastFFT=null, lastTs=0, deviceId=null;
 function onFFTLine(ln){
-  // 新精簡格式：D<裝置ID>,v1,v2,...,v20  （例如 D25754C,40678,8377,...,666）
-  if(ln.charAt(0)==="D" && ln.indexOf(",")>0){
-    const parts = ln.split(",");
-    const idAndFirst = parts[0];        // "D25754C"
-    deviceId = idAndFirst.slice(1);     // 去掉開頭的 D
-    // parts[1..20] 是 20 個頻帶值
-    if(parts.length>=21){
-      const bands = {};
-      let ok = true;
-      for(let k=1;k<=20;k++){
-        const v = parseFloat(parts[k]);
-        if(Number.isNaN(v)){ ok=false; break; }
-        bands[k] = v;
-      }
-      if(ok){ lastFFT = bands; lastTs = performance.now()/1000; return; }
-    }
-    return; // D 開頭但不完整（分包半截），丟棄等下一筆完整的
-  }
-  // 舊格式相容：[ID:xxxxxx][FFT] 1k:.. | ...
+  // 若行首帶 [ID:xxxxxx]，解析出裝置 ID（韌體會在每行 FFT 前面加）
   const m = ln.match(/^\[ID:([0-9A-Fa-f]+)\]/);
   if(m) deviceId = m[1];
   const b=parseFFTLine(ln); if(b){ lastFFT=b; lastTs=performance.now()/1000; }
@@ -221,7 +206,7 @@ async function serialLoop(){
 // ---- 藍芽 (Web Bluetooth, Nordic UART Service) ----
 const NUS_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 const NUS_TX      = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // 裝置->手機 notify
-let bleDevice=null, bleChar=null, bleBuf="";
+let bleDevice=null, bleChar=null, bleBuf="", bleRawCount=0, bleLastRaw="";
 async function connectBLE(){
   if(bleDevice){ await disconnectBLE(); return; }
   if(!("bluetooth" in navigator)){ setStatus("此瀏覽器不支援藍芽，Android 請用 Chrome","warn"); return; }
@@ -246,6 +231,10 @@ async function connectBLE(){
 function onBLEData(e){
   const dec = new TextDecoder();
   const chunk = dec.decode(e.target.value);
+  bleRawCount++;
+  bleLastRaw = chunk.slice(0, 40);
+  // 除錯：把收到的原始資料顯示在狀態列
+  setStatus(`藍芽收到 ${bleRawCount} 包｜${bleLastRaw}`, "on");
   bleBuf += chunk;
   let i;
   while((i=bleBuf.indexOf("\n"))>=0){ const ln=bleBuf.slice(0,i).trim(); bleBuf=bleBuf.slice(i+1); onFFTLine(ln); }
@@ -328,7 +317,7 @@ function startGame(id){
   cv.style.display="block";
   if(current.reset) current.reset(api);
   primary.textContent = current.primaryLabel? (current.primaryLabel()||"") : "";
-  primary.style.display = primary.textContent? "" : "none";
+  primary.style.display = "";   // 永遠顯示（例如「再射一次」隨時可按）
   resize();
   segActive=false; segSamples=[];
   uploadLog({ type:"game_start", game:id });
@@ -339,7 +328,7 @@ function toHub(){ current=null; currentId=null; hub.style.display="flex"; bottom
   segActive=false; segSamples=[]; }
 function onPrimary(){ if(current && current.primary){ current.primary(api);
   if(current.primaryLabel){ const t=current.primaryLabel()||""; primary.textContent=t;
-    primary.style.display=t?"":"none"; } } }
+    primary.style.display=""; } } }
 
 // ---------- 波形紀錄 ----------
 const SEG_MIN_DURATION = 0.15;
@@ -381,6 +370,7 @@ function loop(){
     if(current.render) current.render(g,w,h,api);
     if(current.primaryLabel){ const t=current.primaryLabel()||"";
       if(primary.textContent!==t){ primary.textContent=t; primary.style.display=t?"":"none"; } }
+
   }
   requestAnimationFrame(loop);
 }
@@ -407,7 +397,7 @@ nameEl.onchange=()=> store.set("name", nameEl.value.trim());
 if(!("serial" in navigator)) usbBtn.style.display="none";
 document.body.classList.add("on-hub");   // 初始為選單畫面
 cv.style.display="none";                  // 選單時 canvas 隱藏，不遮住卡片
-setStatus("未連線","");
+setStatus(`未連線 · ${algoStatus()}`,"");
 
 resize(); loop();
 </script>
