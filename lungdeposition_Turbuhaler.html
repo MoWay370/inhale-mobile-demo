@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>肺部沉積率評估</title>
+<style>
+  :root{
+    --bg:#f4f6f8; --panel:#ffffff; --border:#e1e8f0;
+    --accent:#1f4e79; --accent-dk:#163d5e; --accent-lt:#eaf2fd;
+    --green:#2e7d32; --patient:#c0392b; --text:#2c3e50; --dim:#7f8c8d;
+    --grid:#d9e1e8; --lung-bg:#f3dede;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Microsoft JhengHei UI","PingFang TC","Noto Sans TC",sans-serif;}
+  header{background:var(--panel);border-bottom:1px solid var(--border);padding:14px 20px;
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  header h1{font-size:17px;margin:0;color:var(--accent);font-weight:700;}
+  header .sub{font-size:12px;color:var(--dim);}
+  .spacer{flex:1;}
+  button{font-family:inherit;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:14px;
+    padding:9px 16px;transition:filter .15s;}
+  button:active{transform:translateY(1px);}
+  .btn-accent{background:var(--accent);color:#fff;}
+  .btn-accent:hover{background:var(--accent-dk);}
+  .btn-light{background:var(--panel);color:var(--accent);border:1px solid var(--border);}
+  .btn-light:hover{border-color:var(--accent);}
+  input{font-family:inherit;background:#fbfdff;color:var(--text);border:1px solid var(--border);
+    border-radius:8px;padding:8px 11px;font-size:14px;outline:none;}
+  input:focus{border-color:var(--accent);}
+  label{font-size:13px;color:var(--dim);font-weight:600;}
+  main{padding:16px 20px;max-width:1000px;margin:0 auto;}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;
+    background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;}
+  #status{font-size:13px;color:var(--dim);}
+  #status.on{color:var(--green);} #status.warn{color:#c98a13;}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;
+    padding:12px;margin-bottom:14px;}
+  canvas{display:block;width:100%;}
+  .metrics{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;}
+  .metric{flex:1;min-width:120px;}
+  .metric .k{font-size:12px;color:var(--dim);}
+  .metric .v{font-size:20px;font-weight:800;color:var(--accent);}
+  #depositBig{font-size:40px;font-weight:800;color:var(--accent);}
+  .lung-wrap{display:flex;gap:20px;flex-wrap:wrap;align-items:center;justify-content:center;}
+  .note{font-size:12px;color:var(--dim);margin-top:6px;}
+  .warn-note{font-size:12px;color:#b9770e;margin-top:6px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🫁 肺部沉積率評估</h1>
+  <span class="sub">聲學吸入流速 · Budesonide 沉積模型</span>
+  <span class="spacer"></span>
+  <span id="deviceLabel" class="sub">裝置: —</span>
+</header>
+
+<main>
+  <div class="controls">
+    <button id="bleBtn" class="btn-accent">藍芽連線</button>
+    <button id="usbBtn" class="btn-light">USB 連線</button>
+    <span id="status">未連線</span>
+    <span class="spacer"></span>
+    <label>受測者 ID</label>
+    <input id="pid" size="10" placeholder="ID" />
+  </div>
+
+  <div class="controls">
+    <button id="startBtn" class="btn-accent">開始量測</button>
+    <button id="clearBtn" class="btn-light">清除</button>
+    <button id="depoBtn" class="btn-light">計算沉積率</button>
+    <span class="spacer"></span>
+    <span id="peak" style="font-weight:700;">峰值: — L/min</span>
+  </div>
+
+  <div class="card">
+    <canvas id="plot" height="360"></canvas>
+  </div>
+
+  <div class="card" id="result" style="display:none;">
+    <div class="lung-wrap">
+      <canvas id="lung" width="300" height="300"></canvas>
+      <div>
+        <div id="depositBig">—%</div>
+        <div class="note">預估肺部沉積率<br>(佔可回收劑量比例)</div>
+        <div class="metrics" style="margin-top:14px;">
+          <div class="metric"><div class="k">上升時間 t_r</div><div class="v" id="mTr">—</div></div>
+          <div class="metric"><div class="k">峰值吸氣流速 Q_p</div><div class="v" id="mQp">—</div></div>
+          <div class="metric"><div class="k">吸入體積 V</div><div class="v" id="mV">—</div></div>
+        </div>
+        <div id="warnNote" class="warn-note" style="display:none;"></div>
+        <div class="note">模型: BUDLD = 0.147 − 0.0576·t_r + 0.00476·Q_p + 0.0776·V (Eq 2.9)</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script type="module">
+import { analyze, parseFFTLine } from "./breath_algorithm.js";
+
+// ========= 參數（對應 Python）=========
+const IDEAL_FLOW = [0,70,70,60,30,20,5,0,0,0];
+const IDEAL_DT = 0.5;
+// 氣流校正
+const CAL_LOW=30, CAL_MID=60, CAL_TOP=100, CAL_MID_GAIN=0.90, CAL_TOP_GAIN=0.70;
+function calibrateFlow(v){
+  if(v<=CAL_LOW) return v;
+  if(v<=CAL_MID){ const t=(v-CAL_LOW)/(CAL_MID-CAL_LOW); return v*(1+t*(CAL_MID_GAIN-1)); }
+  const t=(Math.min(v,CAL_TOP)-CAL_MID)/(CAL_TOP-CAL_MID);
+  return v*(CAL_MID_GAIN+t*(CAL_TOP_GAIN-CAL_MID_GAIN));
+}
+// BUDLD 模型
+const B0=0.147, BTR=-0.0576, BQP=0.00476, BV=0.0776;
+function computeBudld(tr,qp,v){ return B0+BTR*tr+BQP*qp+BV*v; }
+
+// ========= 狀態 =========
+let deviceId=null, measuring=false, started=false, t0=null;
+let times=[], flows=[];
+let lastFFT=null, lastTs=0;
+let prevFlowYes=false, windowHist=[false,false,false];
+
+// ========= 輸入解析（新精簡格式 D<id>,... + 舊格式相容）=========
+function onLine(ln){
+  if(ln.charAt(0)==="D" && ln.indexOf(",")>0){
+    const parts=ln.split(",");
+    deviceId=parts[0].slice(1);
+    deviceLabel.textContent="裝置: "+deviceId;
+    if(parts.length>=21){
+      const bands={}; let ok=true;
+      for(let k=1;k<=20;k++){ const v=parseFloat(parts[k]); if(Number.isNaN(v)){ok=false;break;} bands[k]=v; }
+      if(ok){ lastFFT=bands; lastTs=performance.now()/1000; handleSample(bands); }
+    }
+    return;
+  }
+  const b=parseFFTLine(ln);
+  if(b){ lastFFT=b; lastTs=performance.now()/1000; handleSample(b); }
+}
+
+// ========= 每筆 FFT 進來的處理（對應 Python _handle_line）=========
+function handleSample(bands){
+  if(!measuring) return;
+  const a = analyze(bands);
+  let est = a.active ? a.flow : 0;
+  // 只取吸氣（跟 Python 一樣，吸入評估）
+  const flowYes = a.active && a.direction==="inhalation";
+
+  // 滑動視窗多數決
+  windowHist.shift();
+  windowHist.push(flowYes);
+  const trueCount = windowHist.filter(x=>x).length;
+  let useYes, useEst;
+  if(trueCount>=2){ useYes=true; useEst=est; }
+  else { useYes=false; useEst=0; }
+
+  // 氣流校正
+  useEst = calibrateFlow(useEst);
+
+  const now = performance.now()/1000;
+  if(!started){
+    if(useYes && prevFlowYes){
+      started=true; t0=now;
+      times=[0,0]; flows=[useEst,useEst];
+      setStatus("偵測到吸氣，記錄中…","on");
+    }
+    prevFlowYes=useYes;
+    return;
+  }
+  prevFlowYes=useYes;
+  times.push(now-t0);
+  flows.push(useEst);
+  redraw();
+}
+
+// ========= 波形繪圖 =========
+const plot=document.getElementById("plot"), pctx=plot.getContext("2d");
+function resizePlot(){ const r=plot.getBoundingClientRect(), dpr=devicePixelRatio||1;
+  plot.width=r.width*dpr; plot.height=360*dpr; pctx.setTransform(dpr,0,0,dpr,0,0); }
+addEventListener("resize", ()=>{ resizePlot(); redraw(); });
+
+function redraw(){
+  const w=plot.clientWidth, h=360;
+  pctx.clearRect(0,0,w,h);
+  const padL=48, padR=16, padT=16, padB=36;
+  const plotW=w-padL-padR, plotH=h-padT-padB;
+  let xmax=Math.max(10, times.length? times[times.length-1]+1 : 10);
+  let ymax=Math.max(100, flows.length? Math.max(...flows)*1.2 : 100);
+
+  // 格線 + 軸
+  pctx.strokeStyle="#d9e1e8"; pctx.lineWidth=1; pctx.fillStyle="#5a6b7a"; pctx.font="11px sans-serif";
+  pctx.textAlign="right"; pctx.textBaseline="middle";
+  for(let i=0;i<=5;i++){
+    const y=padT+plotH*i/5, val=ymax*(1-i/5);
+    pctx.beginPath(); pctx.moveTo(padL,y); pctx.lineTo(w-padR,y); pctx.stroke();
+    pctx.fillText(Math.round(val), padL-6, y);
+  }
+  pctx.textAlign="center"; pctx.textBaseline="top";
+  for(let i=0;i<=5;i++){
+    const x=padL+plotW*i/5, val=xmax*i/5;
+    pctx.fillText(val.toFixed(0), x, h-padB+6);
+  }
+  pctx.fillStyle="#2c3e50"; pctx.textAlign="center";
+  pctx.fillText("時間 (秒)", padL+plotW/2, h-16);
+  pctx.save(); pctx.translate(14,padT+plotH/2); pctx.rotate(-Math.PI/2);
+  pctx.fillText("流速 (L/min)",0,0); pctx.restore();
+
+  const X=t=> padL + plotW*Math.min(t/xmax,1);
+  const Y=v=> padT + plotH*(1-Math.min(v/ymax,1));
+
+  // 理想線（綠虛線）
+  pctx.strokeStyle="#2e7d32"; pctx.lineWidth=2; pctx.setLineDash([6,4]); pctx.beginPath();
+  for(let i=0;i<IDEAL_FLOW.length;i++){ const x=X(i*IDEAL_DT), y=Y(IDEAL_FLOW[i]); i?pctx.lineTo(x,y):pctx.moveTo(x,y); }
+  pctx.stroke(); pctx.setLineDash([]);
+
+  // 病人線（紅）
+  if(times.length){
+    pctx.strokeStyle="#c0392b"; pctx.lineWidth=2.4; pctx.beginPath();
+    for(let i=0;i<times.length;i++){ const x=X(times[i]), y=Y(flows[i]); i?pctx.lineTo(x,y):pctx.moveTo(x,y); }
+    pctx.stroke();
+  }
+
+  if(flows.length) peak.textContent=`峰值: ${Math.max(...flows).toFixed(1)} L/min`;
+}
+
+// ========= 沉積率計算 =========
+function computeMetrics(){
+  if(flows.length<2) return null;
+  const Qp=Math.max(...flows);
+  const pi=flows.indexOf(Qp);
+  let tr=times[pi]-times[0]; if(tr<0) tr=0;
+  let vol=0;
+  for(let i=1;i<times.length;i++){ const dt=times[i]-times[i-1]; if(dt>0) vol+=0.5*(flows[i]+flows[i-1])*dt; }
+  const V=vol/60;
+  return {tr,Qp,V};
+}
+function showDeposition(){
+  if(!started || flows.length<2){ alert("尚未擷取到吸氣波形，請先量測一次吸氣。"); return; }
+  const m=computeMetrics(); if(!m) return;
+  const budld=computeBudld(m.tr,m.Qp,m.V);
+  const frac=Math.max(0,Math.min(1,budld));
+  document.getElementById("result").style.display="block";
+  document.getElementById("depositBig").textContent=(frac*100).toFixed(1)+"%";
+  document.getElementById("mTr").textContent=m.tr.toFixed(2)+" s";
+  document.getElementById("mQp").textContent=m.Qp.toFixed(1)+" L/min";
+  document.getElementById("mV").textContent=m.V.toFixed(2)+" L";
+  const wn=document.getElementById("warnNote");
+  if(budld<0||budld>1){ wn.style.display="block"; wn.textContent="注意：原始模型輸出超出 0–100%，此次吸氣可能落在模型校正範圍外。"; }
+  else wn.style.display="none";
+  drawLung(frac);
+}
+
+// ========= 肺部圖 =========
+const lung=document.getElementById("lung"), lctx=lung.getContext("2d");
+function lungPath(ctx, mirror){
+  // 對應 Python make_lung_path，座標 0-100，y 向上；這裡轉成畫布座標
+  const P=(x,y)=>[ (mirror?100-x:x), y ];
+  const segs=[
+    ['M',[44,82]],
+    ['C',[36,86],[27,85],[19,81]],
+    ['C',[11,75],[8,64],[8,53]],
+    ['C',[8,40],[11,28],[19,20]],
+    ['C',[26,14],[35,15],[41,24]],
+    ['C',[44,40],[45,60],[44,82]],
+  ];
+  const sx=2.6, ox=22, sy=2.6, oy=10; // 縮放置中到 300x300
+  const TX=(x)=> ox + x*sx*(300/112)/2.6*1; // 簡化：直接映射
+  // 用簡單線性映射：x:0-100 -> 30-270, y:0-100(up) -> 畫布 270-30
+  const mapX=(x)=> 30 + (x/100)*240;
+  const mapY=(y)=> 270 - (y/100)*240;
+  ctx.beginPath();
+  for(const s of segs){
+    if(s[0]==='M'){ const [x,y]=P(s[1][0],s[1][1]); ctx.moveTo(mapX(x),mapY(y)); }
+    else{
+      const [x1,y1]=P(s[1][0],s[1][1]);
+      const [x2,y2]=P(s[2][0],s[2][1]);
+      const [x3,y3]=P(s[3][0],s[3][1]);
+      ctx.bezierCurveTo(mapX(x1),mapY(y1),mapX(x2),mapY(y2),mapX(x3),mapY(y3));
+    }
+  }
+  ctx.closePath();
+}
+function drawLung(frac){
+  lctx.clearRect(0,0,300,300);
+  const mapY=(y)=> 270 - (y/100)*240;
+  const ymin=14, ymax=84;
+  const level=ymin+frac*(ymax-ymin);
+
+  // 底色（空肺）
+  lctx.fillStyle="#f3dede";
+  lungPath(lctx,false); lctx.fill();
+  lungPath(lctx,true); lctx.fill();
+
+  // 沉積填充（裁切在肺形內）
+  lctx.save();
+  lctx.beginPath();
+  lungPath(lctx,false); lungPath(lctx,true);
+  lctx.clip();
+  lctx.fillStyle="rgba(31,78,121,0.85)";
+  lctx.fillRect(0, mapY(level), 300, 300-mapY(level));
+  lctx.restore();
+
+  // 氣管
+  lctx.strokeStyle="#1f4e79"; lctx.lineWidth=5; lctx.lineCap="round";
+  const mapX=(x)=>30+(x/100)*240;
+  lctx.beginPath(); lctx.moveTo(mapX(50),mapY(84)); lctx.lineTo(mapX(50),mapY(99)); lctx.stroke();
+  lctx.lineWidth=4;
+  lctx.beginPath(); lctx.moveTo(mapX(50),mapY(84)); lctx.lineTo(mapX(45),mapY(80.5)); lctx.stroke();
+  lctx.beginPath(); lctx.moveTo(mapX(50),mapY(84)); lctx.lineTo(mapX(55),mapY(80.5)); lctx.stroke();
+
+  // 外框
+  lctx.strokeStyle="#1f4e79"; lctx.lineWidth=2.6;
+  lungPath(lctx,false); lctx.stroke();
+  lungPath(lctx,true); lctx.stroke();
+
+  // 水位線
+  lctx.strokeStyle="rgba(31,78,121,0.6)"; lctx.lineWidth=1.4; lctx.setLineDash([5,4]);
+  lctx.beginPath(); lctx.moveTo(mapX(6),mapY(level)); lctx.lineTo(mapX(94),mapY(level)); lctx.stroke();
+  lctx.setLineDash([]);
+
+  // 百分比
+  lctx.fillStyle="#1f4e79"; lctx.font="bold 13px sans-serif"; lctx.textAlign="left"; lctx.textBaseline="middle";
+  lctx.fillText((frac*100).toFixed(0)+"%", mapX(96), mapY(level));
+}
+
+// ========= 連線：USB + BLE（跟遊戲頁一致）=========
+const NUS_SERVICE="6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const NUS_TX="6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+let port=null, reader=null, keepSerial=false;
+let bleDevice=null, bleChar=null, bleBuf="";
+
+async function connectSerial(){
+  if(port){ await disconnectSerial(); return; }
+  if(!("serial" in navigator)){ setStatus("此裝置不支援 USB，手機請用藍芽","warn"); return; }
+  try{ port=await navigator.serial.requestPort(); await port.open({baudRate:115200}); }
+  catch{ setStatus("未選擇 USB 裝置","warn"); port=null; return; }
+  usbBtn.textContent="USB 斷線"; setStatus("USB 已連線","on"); keepSerial=true; serialLoop();
+}
+async function disconnectSerial(){
+  keepSerial=false;
+  try{ if(reader){ await reader.cancel(); reader.releaseLock(); } }catch{}
+  try{ if(port){ await port.close(); } }catch{}
+  port=null; reader=null; usbBtn.textContent="USB 連線"; setStatus("未連線","");
+}
+async function serialLoop(){
+  const dec=new TextDecoderStream(); port.readable.pipeTo(dec.writable).catch(()=>{});
+  reader=dec.readable.getReader(); let buf="";
+  while(keepSerial){ let r; try{ r=await reader.read(); }catch{ break; } if(r.done) break;
+    buf+=r.value; let i;
+    while((i=buf.indexOf("\n"))>=0){ const ln=buf.slice(0,i).trim(); buf=buf.slice(i+1); onLine(ln); } }
+}
+async function connectBLE(){
+  if(bleDevice){ await disconnectBLE(); return; }
+  if(!("bluetooth" in navigator)){ setStatus("此瀏覽器不支援藍芽，Android 請用 Chrome","warn"); return; }
+  try{
+    bleDevice=await navigator.bluetooth.requestDevice({
+      filters:[{name:"SmartInhaler"},{services:[NUS_SERVICE]}], optionalServices:[NUS_SERVICE] });
+    bleDevice.addEventListener("gattserverdisconnected", ()=>{ setStatus("藍芽已斷線","warn"); bleBtn.textContent="藍芽連線"; bleDevice=null; });
+    const server=await bleDevice.gatt.connect();
+    const service=await server.getPrimaryService(NUS_SERVICE);
+    bleChar=await service.getCharacteristic(NUS_TX);
+    await bleChar.startNotifications();
+    bleChar.addEventListener("characteristicvaluechanged", onBLEData);
+    bleBtn.textContent="藍芽斷線"; setStatus("藍芽已連線","on");
+  }catch(err){ setStatus("藍芽未連線 / 已取消","warn"); bleDevice=null; bleChar=null; }
+}
+function onBLEData(e){
+  bleBuf += new TextDecoder().decode(e.target.value);
+  let i;
+  while((i=bleBuf.indexOf("\n"))>=0){ const ln=bleBuf.slice(0,i).trim(); bleBuf=bleBuf.slice(i+1); onLine(ln); }
+}
+async function disconnectBLE(){
+  try{ if(bleChar) await bleChar.stopNotifications(); }catch{}
+  try{ if(bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect(); }catch{}
+  bleDevice=null; bleChar=null; bleBtn.textContent="藍芽連線"; setStatus("未連線","");
+}
+
+// ========= 綁定 =========
+const bleBtn=document.getElementById("bleBtn");
+const usbBtn=document.getElementById("usbBtn");
+const statusEl=document.getElementById("status");
+const deviceLabel=document.getElementById("deviceLabel");
+const peak=document.getElementById("peak");
+function setStatus(t,c=""){ statusEl.textContent="● "+t; statusEl.className=c; }
+bleBtn.onclick=connectBLE;
+usbBtn.onclick=connectSerial;
+if(!("serial" in navigator)) usbBtn.style.display="none";
+
+document.getElementById("startBtn").onclick=()=>{
+  measuring=!measuring;
+  if(measuring){
+    startBtn.textContent="停止量測"; setStatus("量測中…","on");
+    started=false; t0=null; times=[]; flows=[]; prevFlowYes=false; windowHist=[false,false,false];
+    document.getElementById("result").style.display="none";
+    redraw();
+  }else{
+    startBtn.textContent="開始量測"; setStatus("量測停止","");
+    showDeposition();  // 停止時自動算沉積率
+  }
+};
+const startBtn=document.getElementById("startBtn");
+document.getElementById("clearBtn").onclick=()=>{
+  started=false; t0=null; times=[]; flows=[];
+  document.getElementById("result").style.display="none";
+  peak.textContent="峰值: — L/min"; redraw();
+};
+document.getElementById("depoBtn").onclick=showDeposition;
+
+resizePlot(); redraw();
+</script>
+</body>
+</html>
