@@ -13,7 +13,7 @@ export const MODEL = {
   bands: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20],
 
   // 是否「正在吹」:低頻總能量門檻(這裡的『低』指 5~20kHz 範圍內的低半段)
-  active: { minEnergy: 16227, lowBands: [5,6,7,8] },
+  active: { minEnergy: 6227, lowBands: [5,6,7,8] },
 
   // 方向判定:score>0 視為吐氣。
   // 用 numBand/denBand 這組頻帶比值(實測鑑別力最強),再加 5~20kHz 範圍內的高/低頻能量比。
