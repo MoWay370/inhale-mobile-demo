@@ -95,7 +95,7 @@
     <span id="status">未連線</span>
     <span class="spacer"></span>
     <span id="syncStatus"></span>
-    <button id="musicBtn" class="btn-dk btn-md">🔊 氛圍</button>
+    <button id="musicBtn" class="btn-dk btn-md">🔊 音樂</button>
     <label>姓名 / 編號</label>
     <input id="name" maxlength="12" size="8" placeholder="使用者" />
   </div>
@@ -124,6 +124,8 @@
       </div>
     </div>
   </div>
+
+  <audio id="bgm" loop preload="auto" src="music/bg.mp3"></audio>
 
   <div id="bottom" class="bar hide">
     <button id="backBtn" class="btn-dk btn-md">← 返回選單</button>
@@ -333,14 +335,14 @@ function startGame(id){
   primary.textContent = current.primaryLabel? (current.primaryLabel()||"") : "";
   primary.style.display = primary.textContent? "" : "none";
   resize();
-  ensureAudio(); applyMusic();                  // ← 開始播背景音樂
+  ensureAudio(); startBgm();                    // ← 開始播背景音樂
   segActive=false; segSamples=[];
   uploadLog({ type:"game_start", game:id });
 }
 function toHub(){ current=null; currentId=null; hub.style.display="flex"; bottom.classList.add("hide");
   document.body.classList.remove("on-game"); document.body.classList.add("on-hub");
   cv.style.display="none";
-  Sound.stopMusic();                            // ← 回選單停止音樂
+  stopBgm();                                    // ← 回選單停止音樂
   segActive=false; segSamples=[]; }
 function onPrimary(){ if(current && current.primary){ current.primary(api);
   if(current.primaryLabel){ const t=current.primaryLabel()||""; primary.textContent=t;
@@ -392,26 +394,31 @@ function loop(){
 }
 
 // ---------- 背景音樂控制 ----------
-// 手機瀏覽器禁止自動播放：AudioContext 必須在使用者手勢裡解鎖。
+// 手機瀏覽器禁止自動播放：AudioContext / <audio> 都要在使用者手勢裡啟動。
 let audioUnlocked=false;
 function ensureAudio(){ if(Sound.unlock()) audioUnlocked=true; }
-addEventListener("pointerdown", ensureAudio, { passive:true });  // 第一次碰畫面就解鎖
+addEventListener("pointerdown", ensureAudio, { passive:true });
 
-// 循環：氛圍 → 小星星 → 兩隻老虎 → 靜音（童謠皆公共領域旋律，程式即時合成）
-const MUSIC_CYCLE = [
-  { track:"calm",    label:"🔊 氛圍" },
-  { track:"twinkle", label:"🔊 小星星" },
-  { track:"tiger",   label:"🔊 兩隻老虎" },
-  { track:null,      label:"🔇 靜音" },
-];
-let musicIdx = Math.max(0, MUSIC_CYCLE.findIndex(m=> m.track===store.get("musicTrack","calm")));
-function currentTrack(){ return MUSIC_CYCLE[musicIdx].track; }
-function applyMusic(){
-  const tr = currentTrack();
-  Sound.setEnabled(tr!==null);                 // 靜音時連音效一起關
-  if(tr!==null && current) Sound.startMusic(tr); else Sound.stopMusic();
+// 背景音樂 = 播放 music/bg.mp3（把一首開源/可商用音樂放進 repo 的 music/ 就會播真音樂）。
+// 還沒放音檔時，退回很輕的合成氛圍音，App 不會變安靜。音效與呼吸聲不受這顆鈕影響。
+const bgm = document.getElementById("bgm");
+bgm.volume = 0.35;                             // ← 背景音樂音量(0~1)，嫌大就調小
+let bgmOk = false;
+bgm.addEventListener("canplay", ()=>{ bgmOk = true; });
+bgm.addEventListener("error",   ()=>{ bgmOk = false; });
+
+let musicOn = store.get("musicOn", true);
+function startBgm(){
+  if(!musicOn || !current) return;
+  if(bgmOk || bgm.readyState >= 2){
+    try{ bgm.currentTime = 0; }catch(e){}
+    bgm.play().catch(()=> Sound.startMusic("calm"));   // 被瀏覽器擋就用合成備援
+  } else {
+    Sound.startMusic("calm");                  // 沒有音檔時的輕柔備援
+  }
 }
-function updateMusicBtn(){ if(musicBtn) musicBtn.textContent = MUSIC_CYCLE[musicIdx].label; }
+function stopBgm(){ try{ bgm.pause(); }catch(e){} Sound.stopMusic(); }
+function updateMusicBtn(){ if(musicBtn) musicBtn.textContent = musicOn ? "🔊 音樂" : "🔇 靜音"; }
 
 // ---------- 綁定 ----------
 const bleBtn=document.getElementById("bleBtn");
@@ -431,10 +438,9 @@ primary.onclick=onPrimary;
 document.querySelectorAll(".card").forEach(c=> c.onclick=()=>startGame(c.dataset.game));
 musicBtn.onclick=()=>{
   ensureAudio();
-  musicIdx = (musicIdx+1) % MUSIC_CYCLE.length;
-  store.set("musicTrack", currentTrack());
+  musicOn = !musicOn; store.set("musicOn", musicOn);
   updateMusicBtn();
-  applyMusic();
+  if(musicOn && current) startBgm(); else stopBgm();
 };
 updateMusicBtn();
 nameEl.value = store.get("name","")||"";

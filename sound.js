@@ -73,8 +73,8 @@ const Sound = {
 
       // 主匯流排：busDry → 低通 → master(音量) → 限幅器 → 喇叭
       const comp = this._comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -10; comp.knee.value = 24;
-      comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.18;
+      comp.threshold.value = -6; comp.knee.value = 24;
+      comp.ratio.value = 3; comp.attack.value = 0.004; comp.release.value = 0.18;
       comp.connect(ctx.destination);
 
       const master = this._master = ctx.createGain();
@@ -103,11 +103,11 @@ const Sound = {
       });
 
       const musicGain = this._musicGain = ctx.createGain();
-      musicGain.gain.value = 0.85;
+      musicGain.gain.value = 0.3;            // 合成備援音樂：調低，不搶戲
       musicGain.connect(busDry); musicGain.connect(revIn);
 
       const sfxGain = this._sfxGain = ctx.createGain();
-      sfxGain.gain.value = 1.0;
+      sfxGain.gain.value = 2.0;              // 音效：調大聲
       sfxGain.connect(busDry); sfxGain.connect(revIn);
     }
     if (this.ctx.state === "suspended") this.ctx.resume();
@@ -163,17 +163,12 @@ const Sound = {
     b.o2.frequency.setTargetAtTime(base * 2.01, t, 0.05);
     b.filt.frequency.setTargetAtTime(cutoff, t, TC);
     b.g.gain.setTargetAtTime(gain, t, active ? 0.03 : 0.12);
-
-    // 吹得越用力，背景音樂讓一點位置出來（ducking）
-    if (this._musicGain)
-      this._musicGain.gain.setTargetAtTime(0.85 - lvl * 0.45, t, 0.1);
+    // 註：不再隨呼吸調背景音樂音量（原本的 ducking 會讓音樂忽大忽小、聽起來很怪）
   },
 
   _silenceBreath() {
     if (this._breath)
       this._breath.g.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
-    if (this._musicGain)
-      this._musicGain.gain.setTargetAtTime(0.85, this.ctx.currentTime, 0.2);
   },
 
   // =====================================================
@@ -201,9 +196,9 @@ const Sound = {
   _calmBar(t) {
     const beat = 60 / CALM.bpm, bar = beat * 4;
     const root = CALM.chords[this._step % CALM.chords.length];
-    [0, 4, 7].forEach((iv, i) => this._pad(midi(root + 12 + iv), t, bar * 0.98, 0.045 - i * 0.008));
-    this._pluck(midi(root), t, beat * 1.5, 0.09);
-    this._pluck(midi(root), t + beat * 2, beat * 1.5, 0.07);
+    // 稀疏琶音（根→五度→八度→三度，一拍一顆），乾淨不糊，取代原本會打架的和弦墊
+    [0, 7, 12, 16].forEach((iv, i) => this._bell(midi(root + 12 + iv), t + i * beat, beat * 1.2));
+    this._pluck(midi(root), t, beat * 2, 0.05);   // 很輕的低音根
     this._step++; this._nextTime += bar;
   },
   _melodyStep(t) {
