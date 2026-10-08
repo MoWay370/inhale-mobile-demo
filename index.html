@@ -85,9 +85,36 @@
     .btn-lg{font-size:18px;padding:12px 20px;}
     #bottom{position:sticky;bottom:0;z-index:30;}
   }
+  /* ---------- 名稱登入閘 ---------- */
+  #nameGate{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(160deg,#43111a,#5c1a26);padding:24px;}
+  .gate-card{background:var(--panel);border-radius:18px;padding:32px 28px;width:min(360px,92vw);
+    text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.4);}
+  .gate-card .gate-icon{font-size:40px;margin-bottom:10px;}
+  .gate-card h2{color:var(--gold);font-size:22px;margin:0 0 6px;}
+  .gate-card p{color:var(--dim);font-size:14px;margin:0 0 20px;}
+  .gate-card input{width:100%;padding:13px 14px;margin-bottom:14px;border:2px solid var(--track);
+    border-radius:10px;font-size:17px;text-align:center;background:var(--track);color:var(--cream);
+    outline:none;font-family:inherit;}
+  .gate-card input:focus{border-color:var(--gold);}
+  .gate-card button{width:100%;padding:14px;border:none;border-radius:10px;background:var(--gold);
+    color:#3a0a10;font-weight:800;font-size:18px;cursor:pointer;font-family:inherit;}
+  .gate-card button:active{transform:translateY(1px);}
+  #gateErr{color:var(--red-br);font-size:14px;margin-top:10px;min-height:18px;}
 </style>
 </head>
 <body>
+<div id="nameGate">
+  <div class="gate-card">
+    <div class="gate-icon">🎮</div>
+    <h2>開始前請輸入名稱</h2>
+    <p>請輸入遊戲者的姓名或編號</p>
+    <input id="gateName" maxlength="12" placeholder="例如：王小明 或 A01" autocomplete="off" />
+    <button id="gateBtn">進入遊戲</button>
+    <div id="gateErr"></div>
+  </div>
+</div>
+
 <div id="app">
   <div class="bar top">
     <button id="bleBtn" class="btn-blue btn-md">藍芽連線</button>
@@ -326,6 +353,7 @@ const api = { colors:COLORS, store, ONSET,
 // ---------- 遊戲切換 ----------
 let current=null, currentId=null;
 function startGame(id){
+  if(!nameEl.value.trim()){ showNameGate(); return; }   // 沒名稱不能玩
   current = GAMES[id]; if(!current) return;
   currentId = id;
   hub.style.display="none"; bottom.classList.remove("hide");
@@ -446,12 +474,31 @@ updateMusicBtn();
 nameEl.value = store.get("name","")||"";
 nameEl.onchange=()=> store.set("name", nameEl.value.trim());
 
+// ---------- 名稱登入閘 ----------
+const nameGate=document.getElementById("nameGate");
+const gateName=document.getElementById("gateName");
+const gateBtn=document.getElementById("gateBtn");
+const gateErr=document.getElementById("gateErr");
+function showNameGate(){ gateName.value = nameEl.value.trim(); gateErr.textContent="";
+  nameGate.style.display="flex"; setTimeout(()=>gateName.focus(), 60); }
+function hideNameGate(){ nameGate.style.display="none"; }
+function submitName(){
+  const v = gateName.value.trim();
+  if(!v){ gateErr.textContent="請先輸入名稱才能開始"; return; }
+  nameEl.value = v; store.set("name", v);
+  ensureAudio();                      // 順便用這個手勢解鎖音訊
+  hideNameGate();
+}
+gateBtn.onclick=submitName;
+gateName.addEventListener("keydown", e=>{ if(e.key==="Enter") submitName(); });
+
 // 手機沒有 Web Serial 時，隱藏 USB 按鈕，主推藍芽
 if(!("serial" in navigator)) usbBtn.style.display="none";
 document.body.classList.add("on-hub");   // 初始為選單畫面
 cv.style.display="none";                  // 選單時 canvas 隱藏，不遮住卡片
 setStatus("未連線","");
 
+showNameGate();                       // 一進來就要求輸入遊戲者名稱
 resize(); loop();
 </script>
 </body>
