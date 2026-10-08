@@ -22,8 +22,8 @@ const SCROLL_SPEED = 130;   // px/s
 const BALLOON_ONSET = 8;
 const BALLOON_LO = 10;
 const BALLOON_HI = 150;
-const BALLOON_FILL_BASE = 1;
-const BALLOON_FILL_MAX = 3;
+const BALLOON_FILL_BASE = 0.22;   // 低力道：約 4.5 秒吹滿（放慢，需持續吹氣）
+const BALLOON_FILL_MAX = 0.5;     // 高力道：約 2 秒吹滿
 const BALLOON_LEAK = 0.1;
 
 const SC_GREAT = 300, SC_GOOD = 100;
