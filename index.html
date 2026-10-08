@@ -382,6 +382,7 @@ function loop(){
   const w=cv.clientWidth, h=cv.clientHeight;
   if(current){
     if(current.update) current.update(dt,input,api);
+    Sound.breath(input.flow, input.signed);     // ← 呼吸即時回饋（與遊戲結合的核心）
     g.clear(COLORS.bg);
     if(current.render) current.render(g,w,h,api);
     if(current.primaryLabel){ const t=current.primaryLabel()||"";

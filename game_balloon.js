@@ -36,6 +36,7 @@ function update(dt, input, api){
   // 吹滿且穩住 -> 放飛
   if(S.size>=0.999){
     S.flew=true; S.flyY=0; S.success+=1; api.store.set("balloon_best",Math.max(S.success, api.store.get("balloon_best",0)));
+    api.sound?.sfx("pop");                       // ← 氣球吹滿爆開音
     S.fb="放飛成功！太棒了 🎉"; S.fbCol=api.colors.gold;
     for(let i=0;i<28;i++){ S.sparkle.push({x:(Math.random()*2-1),y:0,life:0.8+Math.random()*0.6,
       col:[api.colors.gold,api.colors.redBr,api.colors.green,api.colors.blue][i%4],sz:3+Math.random()*4}); }

@@ -61,6 +61,7 @@ function tierOf(power){
 }
 
 function launch(api){
+  api.sound?.sfx("launch");                      // ← 發射音
   S.power = Math.max(0, Math.min(1, S.peak / P.REF_MAX));
   S.tier = tierOf(S.power);
   S.lastPeak = S.peak;   // 記住這一發的峰值，結算時顯示
@@ -118,11 +119,14 @@ function update(dt, input, api){
         S.score += P.WALL.pts; api.store.set("angrybird_score", S.score);
         S.best = Math.max(S.best, P.WALL.pts); api.store.set("angrybird_best", S.best);
         S.shake = 1;
+        api.sound?.sfx("boom");                   // ← 城牆擊倒的低頻衝擊
         spawnRubble(w*cfg.endXR, groundY - h*P.WALL.heightRatio, h);
         S.msg = `轟！城牆倒了！+${P.WALL.pts} 分`; S.msgCol=api.colors.gold;
       } else if(S.tier==="medium"){
+        api.sound?.sfx("good");
         S.msg = "力道普通，飛到半路就掉下來了，再吸大力一點！"; S.msgCol=api.colors.cream;
       } else {
+        api.sound?.sfx("miss");
         S.msg = "力道太小，只飛了一點點～再吸更用力一點！"; S.msgCol=api.colors.cream;
       }
       S.phase = "result";

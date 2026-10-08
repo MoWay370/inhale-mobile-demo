@@ -88,6 +88,7 @@ function judgeHold(note, api){
   else result="miss";
   note.judged = result;
   S.counts[result]++;
+  api.sound?.sfx(result);                        // ← great/good/miss 直接對應音效
   if(result==="miss"){
     S.combo=0; S.gauge=Math.max(0,S.gauge+GA_MISS);
     popJudge("不可", api.colors.dim, api);
@@ -108,6 +109,7 @@ function judgeBalloon(note, api){
   else { result="miss"; gaugeDelta=GA_BALLOON_FAIL; scoreBase=0; }
   note.judged=result;
   S.counts[result==="great"?"great":result==="good"?"good":"miss"]++;
+  api.sound?.sfx(result==="great"?"pop":result);  // ← 吹滿爆開，其餘對應音效
   if(result==="miss"){ S.combo=0; popJudge("氣球沒吹滿", api.colors.dim, api); }
   else { S.combo++; S.bestCombo=Math.max(S.bestCombo,S.combo); S.score+=Math.round(scoreBase);
     popJudge(result==="great"?"氣球吹滿！":"氣球有到一半！", result==="great"?api.colors.gold:api.colors.green, api); }
