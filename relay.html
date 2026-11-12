@@ -63,6 +63,16 @@
   .meter i.wrongdir{background:var(--gold);}
   .dirtxt{font-size:13px;width:70px;text-align:right;color:var(--dim);}
   .start-row{display:flex;gap:14px;flex-wrap:wrap;align-items:center;}
+  .pool{background:var(--panel);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:10px;}
+  .pool .phead{display:flex;align-items:center;gap:12px;justify-content:space-between;color:var(--cream);}
+  .pool .pempty{display:none;color:var(--dim);font-size:14px;}
+  .pool.empty .pempty{display:block;}
+  .prow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel2);border-radius:10px;padding:10px 12px;}
+  .prow .pid{font-weight:800;font-family:Consolas,monospace;min-width:130px;}
+  .prow .meter{min-width:120px;}
+  .prow .ptxt{font-size:13px;color:var(--dim);}
+  .prow .pbtns{display:flex;gap:6px;flex-wrap:wrap;}
+  .prow .pbtns button{font-size:13px;padding:7px 10px;}
   .start-row .note{color:var(--dim);font-size:14px;}
   details{background:var(--panel);border-radius:12px;padding:10px 14px;}
   summary{cursor:pointer;font-weight:700;color:var(--dim);}
@@ -116,7 +126,7 @@
       <div class="inner">
         <div>
           <h1>呼吸接力賽：龍舟 ／ 火箭</h1>
-          <p class="lead">四支呼吸訓練管接四台裝置。老師先分組：<b>1、2 號給第一組</b>，<b>3、4 號給第二組</b>。依序連接裝置、輸入姓名，再按開始。<br>
+          <p class="lead">四支呼吸訓練管接四台裝置。老師先分組：<b>1、2 號給第一組</b>，<b>3、4 號給第二組</b>。插上裝置（會依貼紙號碼自動對應）、輸入病患姓名，再按開始。<br>
           輪流順序：1 → 3 → 2 → 4 → 1 …，只有輪到的那台裝置會被讀入遊戲。<br>
           先到終點的組會等另一組也抵達；<b>兩組都到終點後，比每次最大氣流的平均</b>決定勝負（跟誰先開始、吸幾次無關）。</p>
         </div>
@@ -132,8 +142,16 @@
           </div>
         </div>
 
+        <div id="pool" class="pool empty">
+          <div class="phead"><b>裝置連線</b>
+            <button class="btn-gold btn-md" id="addDev">＋ 連接裝置</button></div>
+          <div id="poolList"></div>
+          <div class="pempty">裝置插上 USB 後會依編號自動放到 1~4 號。這台電腦第一次使用時，按「連接裝置」把每台的 COM 埠各選一次，之後就會自動連。</div>
+        </div>
+
         <div class="hint">
-          <b>確認裝置編號：</b>連上後對著管子呼吸，看哪一條的綠色條在動，就知道是幾號（右邊會顯示判斷到的是「吸」還是「吹」）。<br>
+          <b>使用方式：</b>每台裝置外殼貼 1~4 號貼紙，編號也寫在裝置裡。插上 USB 就自動對到同號，操作人員只要在 1~4 號填病患姓名（可以先填好，姓名會保留到下次）。<br>
+          <b>新裝置設定編號（每台只做一次）：</b>只插這一台，按「寫入 N 號」，再貼上同號貼紙。<br>
           <b>沒有裝置也能試玩：</b>設定畫面按住 <kbd>1</kbd>~<kbd>4</kbd> 模擬對應裝置；遊戲中按住 <kbd>空白鍵</kbd> 模擬目前輪到的人（按越久氣流越大）。
         </div>
 
@@ -141,6 +159,7 @@
           <button class="btn-gold btn-lg" id="startInhale">🐉 開始：吸氣 · 龍舟賽</button>
           <button class="btn-gold btn-lg" id="startExhale" style="background:#9fd4ff">🚀 開始：吹氣 · 火箭賽</button>
           <span class="note" id="connNote"></span>
+          <button class="btn-dk btn-md" id="clearNames">清空姓名</button>
         </div>
 
         <details>
@@ -244,53 +263,141 @@ const TEAMS = {
 };
 
 // =====================================================================
-//  四台裝置（Web Serial，各自一個 port）
+//  裝置連線（Web Serial）
+//  - 每台裝置的編號（= 外殼貼紙號碼）存在裝置韌體裡，每秒送一行「[NUM] 3」
+//  - 遊戲讀到 [NUM] n 就把這台放到 n 號，操作人員只要在 1~4 號輸入姓名
+//  - 還沒設定編號的裝置送「[NUM] 0」，可以在「未指定」區直接寫入編號（送 SETNUM n）
+//  - 舊韌體沒有 [NUM]：可以在「未指定」區手動指定這一次的編號（不會記住）
+//  - 支援兩種資料格式：
+//      新：D3AF9C2B1,v1,v2,...,v20   （D + 晶片 ID + 20 個頻帶，1k~20k）
+//      舊：[FFT] 1k:... | 2k:... | ...
 // =====================================================================
 const devs = {};
-for(const id of [1,2,3,4]) devs[id] = { id, port:null, reader:null, reading:false, lastFFT:null, lastTs:-99,
+for(const id of [1,2,3,4]) devs[id] = { id, conn:null, lastFFT:null, lastTs:-99,
   lastExh:-99, sim:0, simHeld:false, name:"", sm:0, peakT:-99 };
+const conns = [];                                   // 所有開著的序列埠
 
 function supported(){ return "serial" in navigator; }
 
-async function connectDev(d){
-  if(d.port){ await disconnectDev(d); return; }
-  if(!supported()){ toast("這個瀏覽器不支援 Web Serial，請用 Chrome 或 Edge 開啟"); return; }
-  let port;
-  try{ port = await navigator.serial.requestPort(); }catch{ return; }
-  const other = Object.values(devs).find(x=>x.port===port);
-  if(other){ toast(`這個連接埠已經是 ${other.id} 號了，請選另一個`); return; }
+function parseLine(line){
+  line = line.trim();
+  let m = /^D([0-9A-Fa-f]{4,16}),(.*)$/.exec(line);
+  if(m){
+    const id=m[1].toUpperCase(), vals=m[2].split(",").map(Number);
+    if(vals.length>=20 && vals.slice(0,20).every(Number.isFinite)){
+      const bands={}; for(let k=0;k<20;k++) bands[k+1]=vals[k];
+      return { id, bands };
+    }
+    return { id };
+  }
+  m = /^\[NUM\]\s*(\d+)/.exec(line);
+  if(m) return { num:parseInt(m[1],10) };
+  m = /^\[ID\]\s*device\s*=\s*([0-9A-Fa-f]{4,16})/.exec(line);
+  if(m) return { id:m[1].toUpperCase() };
+  const bands = parseFFTLine(line);
+  return bands ? { bands } : null;
+}
+
+async function openConn(port){
+  let c = conns.find(x=>x.port===port);
+  if(c) return c;
   try{ await port.open({ baudRate:115200 }); }
-  catch(err){ toast("連接埠打不開（可能被其他程式占用）：" + err.message); return; }
-  d.port=port; d.reading=true; d.lastTs=-99;
-  refreshSlot(d);
-  readLoop(d);
+  catch(err){
+    if(err && err.name==="InvalidStateError"){ /* 已經開著 */ }
+    else { toast("連接埠打不開（可能被其他程式占用，例如 Arduino 序列埠監控）"); return null; }
+  }
+  c = { port, reader:null, reading:true, hwId:null, num:undefined, slot:0, lastFFT:null, lastTs:-99, sm:0, peakT:-99,
+        openedAt:performance.now()/1000 };
+  conns.push(c);
+  readLoop(c);
+  renderPool();
+  setTimeout(renderPool, 2600);   // 2.5 秒內沒收到 [NUM] 就當作舊韌體
+  return c;
 }
-async function disconnectDev(d){
-  d.reading=false;
-  try{ if(d.reader){ await d.reader.cancel(); d.reader.releaseLock(); } }catch{}
-  try{ if(d.port){ await d.port.close(); } }catch{}
-  d.port=null; d.reader=null; d.lastFFT=null; d.lastTs=-99;
-  refreshSlot(d);
+async function closeConn(c){
+  c.reading=false;
+  try{ if(c.reader){ await c.reader.cancel(); c.reader.releaseLock(); } }catch{}
+  try{ await c.port.close(); }catch{}
+  dropConn(c);
 }
-async function readLoop(d){
+function dropConn(c){
+  const i=conns.indexOf(c); if(i>=0) conns.splice(i,1);
+  if(c.slot) unassignSlot(c.slot);
+  renderPool(); refreshAllSlots();
+}
+async function readLoop(c){
   const dec = new TextDecoderStream();
-  d.port.readable.pipeTo(dec.writable).catch(()=>{});
-  d.reader = dec.readable.getReader(); let buf="";
-  while(d.reading){
-    let r; try{ r=await d.reader.read(); }catch{ break; }
+  c.port.readable.pipeTo(dec.writable).catch(()=>{});
+  c.reader = dec.readable.getReader(); let buf="";
+  while(c.reading){
+    let r; try{ r=await c.reader.read(); }catch{ break; }
     if(r.done) break;
     buf += r.value; let i;
-    while((i=buf.indexOf("\n"))>=0){
-      const ln=buf.slice(0,i).trim(); buf=buf.slice(i+1);
-      const b=parseFFTLine(ln); if(b){ d.lastFFT=b; d.lastTs=performance.now()/1000; }
-    }
+    while((i=buf.indexOf("\n"))>=0){ const ln=buf.slice(0,i); buf=buf.slice(i+1); onLine(c, ln); }
     if(buf.length>8000) buf="";
   }
 }
+function onLine(c, ln){
+  const p = parseLine(ln); if(!p) return;
+  if(p.id && p.id!==c.hwId){ c.hwId=p.id; renderPool(); refreshAllSlots(); }
+  if(p.num!=null && p.num!==c.num){ c.num=p.num; onNumbered(c); }
+  if(p.bands){
+    const t=performance.now()/1000;
+    c.lastFFT=p.bands; c.lastTs=t;
+    if(c.slot){ const d=devs[c.slot]; d.lastFFT=p.bands; d.lastTs=t; }
+  }
+}
+// 讀到裝置編號：1~4 → 自動放到那一號；0 或重複 → 放「未指定」
+function onNumbered(c){
+  const n=c.num;
+  if(n>=1 && n<=4){
+    const other=devs[n].conn;
+    if(other && other!==c && other.num===n){
+      if(c.slot) unassignSlot(c.slot);
+      toast(`有兩台裝置都設成 ${n} 號，請到「未指定」把其中一台改號`);
+    } else {
+      assign(c, n);
+    }
+  } else if(c.slot){ unassignSlot(c.slot); }
+  renderPool(); refreshAllSlots();
+}
+function assign(c, n){
+  if(c.slot===n) return;
+  if(c.slot) unassignSlot(c.slot);
+  const prev=devs[n].conn; if(prev && prev!==c) prev.slot=0;
+  devs[n].conn=c; c.slot=n; devs[n].lastFFT=null; devs[n].lastTs=-99;
+  renderPool(); refreshAllSlots();
+}
+async function writeCmd(c, text){
+  try{ const w=c.port.writable.getWriter(); await w.write(new TextEncoder().encode(text)); w.releaseLock(); return true; }
+  catch(err){ toast("寫入裝置失敗：" + err.message); return false; }
+}
+// 把編號寫進裝置韌體（裝置回 [NUM] n 後會自動放到 n 號）
+async function writeNum(c, n){
+  if(await writeCmd(c, `SETNUM ${n}\n`)) toast(`已寫入 ${n} 號，請在這台貼上 ${n} 號貼紙`);
+}
+function unassignSlot(n){
+  const c=devs[n].conn; if(c) c.slot=0;
+  devs[n].conn=null; devs[n].lastFFT=null; devs[n].lastTs=-99;
+}
+// 「連接裝置」：選序列埠（每台電腦第一次每台選一次，之後瀏覽器會記住、自動連）
+async function addDevice(){
+  if(!supported()){ toast("這個瀏覽器不支援 Web Serial，請用 Chrome 或 Edge 開啟"); return; }
+  let port; try{ port = await navigator.serial.requestPort(); }catch{ return; }
+  await openConn(port);
+}
+// 開頁面時：自動打開之前授權過的序列埠
+async function autoConnect(){
+  if(!supported()) return;
+  let ports=[]; try{ ports = await navigator.serial.getPorts(); }catch{}
+  for(const p of ports) await openConn(p);
+}
 if(supported()){
+  navigator.serial.addEventListener("connect", e=>{ openConn(e.target); });
   navigator.serial.addEventListener("disconnect", e=>{
-    const d=Object.values(devs).find(x=>x.port===e.target);
-    if(d){ d.reading=false; d.port=null; d.reader=null; d.lastFFT=null; refreshSlot(d); toast(`${d.id} 號裝置已拔除`); }
+    const c=conns.find(x=>x.port===e.target); if(!c) return;
+    const n=c.slot; c.reading=false; dropConn(c);
+    if(n) toast(`${n} 號裝置已拔除，插回去會自動接上`);
   });
 }
 
@@ -335,8 +442,7 @@ function buildSlots(){
       <div class="badge">${id}</div>
       <div>
         <div class="row">
-          <input type="text" maxlength="10" placeholder="${id} 號使用者姓名" />
-          <button class="btn-gold conn">連接裝置</button>
+          <input type="text" maxlength="10" placeholder="${id} 號病患姓名" />
         </div>
         <div class="row">
           <span class="st">未連線</span>
@@ -350,30 +456,51 @@ function buildSlots(){
     devs[id].name = inp.value.trim();
     inp.addEventListener("input", ()=>{ devs[id].name=inp.value.trim(); store.set("name"+id, devs[id].name); });
     inp.addEventListener("keydown", e=>e.stopPropagation());
-    el.querySelector(".conn").onclick = ()=>connectDev(devs[id]);
-    slotEls[id] = { el, inp, btn:el.querySelector(".conn"), st:el.querySelector(".st"),
+    slotEls[id] = { el, inp, st:el.querySelector(".st"),
       bar:el.querySelector(".meter i"), dir:el.querySelector(".dirtxt") };
   }
   const chips=$("chips");
   for(const id of [1,2,3,4]){ const c=document.createElement("span"); c.className="chip"; c.textContent=id+"號"; c.id="chip"+id; chips.appendChild(c); }
 }
 function refreshSlot(d){
-  const s=slotEls[d.id]; if(!s) return;
-  if(d.port){ s.btn.textContent="斷線"; s.btn.className="btn-dk conn"; }
-  else { s.btn.textContent="連接裝置"; s.btn.className="btn-gold conn"; }
   updateConnNote();
 }
+function refreshAllSlots(){ for(const id of [1,2,3,4]) refreshSlot(devs[id]); }
+// 「未指定的裝置」清單：每台有晶片 ID、即時氣流條、設為 1~4 號的按鈕
+const poolEls = new Map();
+function renderPool(){
+  const box=$("poolList"); if(!box) return;
+  const free = conns.filter(c=>!c.slot);
+  $("pool").classList.toggle("empty", free.length===0);
+  box.innerHTML=""; poolEls.clear();
+  const now=performance.now()/1000;
+  for(const c of free){
+    const row=document.createElement("div"); row.className="prow";
+    let msg, btns="";
+    const numBtns=(label,act)=>[1,2,3,4].map(n=>`<button data-n="${n}" data-act="${act}" style="background:${TEAMS[TEAM_OF[n]].color};color:#fff">${label.replace("N",n)}</button>`).join("");
+    if(c.num===undefined && now-c.openedAt<2.5){ msg="讀取編號中…"; }
+    else if(c.num===undefined){ msg="舊韌體（沒有編號）：這次先手動指定，建議更新韌體"; btns=numBtns("當 N 號","temp"); }
+    else if(c.num===0){ msg="這台還沒設定編號：寫入後貼上同號貼紙"; btns=numBtns("寫入 N 號","write"); }
+    else if(c.num>=1 && c.num<=4){ msg=`這台也是 ${c.num} 號，跟另一台重複，請改號`; btns=numBtns("改成 N 號","write"); }
+    else { msg=`這台是 ${c.num} 號（只支援 1~4）`; btns=numBtns("改成 N 號","write"); }
+    row.innerHTML = `<span class="pid">${c.hwId? "ID "+c.hwId : "裝置"}</span>
+      <div class="meter"><i></i></div><span class="ptxt">${msg}</span><span class="pbtns">${btns}</span>`;
+    row.querySelectorAll("button").forEach(bn=> bn.onclick=()=>{
+      const n=+bn.dataset.n; if(bn.dataset.act==="write") writeNum(c,n); else assign(c,n); });
+    box.appendChild(row); poolEls.set(c, row.querySelector(".meter i"));
+  }
+}
 function updateConnNote(){
-  const n = Object.values(devs).filter(d=>d.port).length;
-  $("connNote").textContent = n===4 ? "4 台裝置都已連線 ✓" : `已連線 ${n} / 4 台（未連線的可用空白鍵代替）`;
+  const n = Object.values(devs).filter(d=>d.conn).length;
+  $("connNote").textContent = n===4 ? "1~4 號裝置都已連線 ✓" : `已連線 ${n} / 4 台（未連線的可用空白鍵代替）`;
 }
 function updateSetupMeters(now){
   for(const id of [1,2,3,4]){
     const d=devs[id], s=slotEls[id];
     const live=isLive(d,now);
-    if(d.port) { s.st.textContent = live? "● 收到資料" : "● 已連線，等待資料…"; s.st.className = "st"+(live?" on":""); }
+    if(d.conn) { s.st.textContent = live? `● ${id} 號裝置已連線` : `● ${id} 號裝置已連線，等待資料…`; s.st.className = "st"+(live?" on":""); }
     else if(d.sim>1) { s.st.textContent="● 鍵盤模擬中"; s.st.className="st on"; }
-    else { s.st.textContent="未連線"; s.st.className="st"; }
+    else { s.st.textContent=`等待 ${id} 號裝置…`; s.st.className="st"; }
     // 設定畫面不限方向，顯示原始氣流與判斷方向
     let flow=0, dir=null;
     if(d.sim>1){ flow=d.sim; dir="inhalation"; }
@@ -383,11 +510,17 @@ function updateSetupMeters(now){
     s.bar.className = "";
     s.dir.textContent = dir==="inhalation" ? `吸 ${Math.round(flow)}` : dir==="exhalation" ? `吹 ${Math.round(flow)}` : "—";
   }
+  // 未指定裝置的即時氣流條
+  for(const [c,bar] of poolEls){
+    let flow=0; if(c.lastFFT && now-c.lastTs<0.3){ const a=analyze(c.lastFFT); if(a.active) flow=a.flow; }
+    flow = smoothFlow(c, flow, 1/60, now);
+    bar.style.width = Math.min(100, flow/(CFG.ref*3)*100) + "%";
+  }
 }
 function updateChips(now){
   for(const id of [1,2,3,4]){
     const c=$("chip"+id), d=devs[id];
-    c.className = "chip" + (d.port?" on":"") + (isLive(d,now)?" live":"");
+    c.className = "chip" + (d.conn?" on":"") + (isLive(d,now)?" live":"");
   }
 }
 function loadCfgUI(){
@@ -966,7 +1099,10 @@ function loop(){
   requestAnimationFrame(loop);
 }
 
-buildSlots(); loadCfgUI(); updateConnNote();
+buildSlots(); loadCfgUI(); updateConnNote(); renderPool();
+$("addDev").onclick = addDevice;
+$("clearNames").onclick = ()=>{ for(const id of [1,2,3,4]){ devs[id].name=""; slotEls[id].inp.value=""; store.set("name"+id,""); } };
+autoConnect();
 if(CLOUD) $("hubLink").classList.remove("hide");
 if(!supported()) toast("這個瀏覽器不支援 Web Serial，請用 Chrome 或 Edge 開啟（仍可用鍵盤試玩）");
 $("cfgStrict").onchange = readCfgUI; $("cfgWin").onchange = readCfgUI;
