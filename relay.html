@@ -424,7 +424,7 @@ function newGame(mode){
     theme: mode==="inhale" ? "boat" : "rocket",
     idx:0, phase:"intro", t:0,
     pos:{A:0,B:0}, disp:{A:0,B:0},
-    curFlow:0, maxFlow:0, rawFlow:0, wrong:false, onsetT:0,
+    curFlow:0, maxFlow:0, dispMax:0, rawFlow:0, wrong:false, onsetT:0,
     lastAdv:0, winner:null, finished:{A:false,B:false}, arrive:[], banner:null,
     series:[], cloudLogged:false,
     rowPhase:{1:0,2:0,3:0,4:0},
@@ -507,12 +507,13 @@ function update(dt, now){
 
   if(G.phase==="intro"){
     G.curFlow=0;
-    if(G.t>(G.banner && G.banner.t<2.2 ? 2.2 : 1.2)){ G.phase="wait"; G.t=0; G.onsetT=0; G.maxFlow=0; }
+    if(G.t>(G.banner && G.banner.t<2.2 ? 2.2 : 1.2)){ G.phase="wait"; G.t=0; G.onsetT=0; G.maxFlow=0; G.dispMax=0; }
   } else if(G.phase==="wait"){
-    if(r.flow>=CFG.onset){ G.onsetT+=dt; if(G.onsetT>=0.1){ G.phase="active"; G.t=0; G.maxFlow=rawEff; G.series=[]; } }
+    if(r.flow>=CFG.onset){ G.onsetT+=dt; if(G.onsetT>=0.1){ G.phase="active"; G.t=0; G.maxFlow=rawEff; G.dispMax=r.flow; G.series=[]; } }
     else G.onsetT=0;
   } else if(G.phase==="active"){
-    G.maxFlow=Math.max(G.maxFlow, rawEff);
+    G.maxFlow=Math.max(G.maxFlow, rawEff);      // 紀錄用：未平滑的瞬間峰值
+    G.dispMax=Math.max(G.dispMax, r.flow);      // 畫面用：綠色條的最高點，黃色標記被它頂上去
     G.series.push({ t:+G.t.toFixed(2), f:Math.round(rawEff), d: G.mode==="inhale"?1:-1 });
     // 手臂划槳：氣流越大划越快，沒氣流時也維持慢速划動
     G.rowPhase[id] += dt*(3 + Math.min(1, r.flow/(CFG.ref*1.5))*9);
@@ -680,9 +681,9 @@ function drawHUD(w,h,H,now){
     // 1 格參考線
     const refX=bx+bw*(CFG.ref/full); ctx.fillStyle="rgba(255,243,223,.7)"; ctx.fillRect(refX-1.5,by-4,3,bh+8);
     text("1格", refX, by+bh+12, 12, "rgba(255,243,223,.75)");
-    // 最大值標記：粗黃條 + 上方三角形
-    if(G.maxFlow>0 && G.phase!=="intro"){
-      const mx=bx+Math.min(1,G.maxFlow/full)*bw;
+    // 最大值標記：粗黃條 + 上方三角形（跟著綠色條的最高點，會被綠色條頂上去）
+    if(G.dispMax>0 && G.phase!=="intro"){
+      const mx=bx+Math.min(1,G.dispMax/full)*bw;
       ctx.fillStyle="#ffd24a"; rrect(mx-5,by-8,10,bh+16,4); ctx.fill();
       ctx.strokeStyle="#3a0a10"; ctx.lineWidth=2; ctx.stroke();
       ctx.beginPath(); ctx.moveTo(mx-11,by-20); ctx.lineTo(mx+11,by-20); ctx.lineTo(mx,by-8); ctx.closePath();
