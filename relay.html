@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>呼吸接力賽</title>
+<style>
+  :root{
+    --bg:#43111a; --panel:#5c1a26; --panel2:#6e2230; --header:#370d14; --track:#2c0910;
+    --gold:#ffd24a; --gold-dk:#b8862a; --red:#e6402f; --red-br:#ff6a52;
+    --cream:#fff3df; --green:#7fe08d; --blue:#4aa3ff; --dim:#e0b58f;
+    --teamA:#ff5a3c; --teamB:#3d9bff;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--cream);
+    font-family:"Microsoft JhengHei UI","Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;overflow:hidden;}
+  #app{display:flex;flex-direction:column;height:100vh;}
+  .bar{background:var(--header);display:flex;align-items:center;gap:10px;padding:8px 14px;flex-wrap:wrap;}
+  .bar .title{font-weight:800;color:var(--gold);font-size:17px;}
+  .spacer{flex:1;}
+  button{font-family:inherit;border:none;border-radius:10px;cursor:pointer;font-weight:700;
+    transition:transform .06s ease, filter .15s ease;}
+  button:hover{filter:brightness(1.08);}
+  button:active{transform:translateY(1px) scale(.99);}
+  button:disabled{opacity:.45;cursor:not-allowed;}
+  .btn-gold{background:var(--gold);color:#3a0a10;} .btn-dk{background:var(--panel);color:var(--cream);}
+  .btn-red{background:var(--red);color:var(--cream);}
+  .btn-md{font-size:15px;padding:9px 16px;} .btn-lg{font-size:20px;padding:14px 26px;}
+  input[type=text],input[type=number]{font-family:inherit;background:var(--track);color:var(--cream);border:2px solid transparent;
+    border-radius:8px;padding:9px 11px;font-size:17px;outline:none;width:100%;}
+  input:focus{border-color:var(--gold);}
+  .chips{display:flex;gap:6px;}
+  .chip{font-size:13px;padding:4px 9px;border-radius:999px;background:var(--panel);color:var(--dim);font-weight:700;}
+  .chip.on{background:#1f5a2c;color:var(--green);}
+  .chip.live{box-shadow:0 0 0 2px var(--green) inset;}
+
+  #wrap{flex:1;position:relative;min-height:0;}
+  canvas{width:100%;height:100%;display:block;}
+  .overlay{position:absolute;inset:0;overflow:auto;background:var(--bg);padding:22px 18px 30px;}
+  .hide{display:none !important;}
+
+  /* ---------- 設定畫面 ---------- */
+  #setup .inner{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:18px;}
+  #setup h1{margin:0;color:var(--gold);font-size:clamp(26px,4vw,40px);}
+  #setup .lead{margin:0;color:var(--dim);font-size:16px;line-height:1.6;}
+  .teams{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  @media (max-width:760px){ .teams{grid-template-columns:1fr;} }
+  .team{border-radius:16px;padding:14px;background:var(--panel);border-top:6px solid var(--c);}
+  .team h2{margin:2px 4px 12px;font-size:20px;color:var(--c);display:flex;align-items:center;gap:8px;}
+  .team h2 small{color:var(--dim);font-size:14px;font-weight:600;}
+  .slot{display:grid;grid-template-columns:64px 1fr;gap:12px;align-items:center;
+    background:var(--panel2);border-radius:12px;padding:12px;margin-bottom:10px;}
+  .slot:last-child{margin-bottom:0;}
+  .badge{width:64px;height:64px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+    font-size:36px;font-weight:900;background:var(--c);color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.25);}
+  .slot .row{display:flex;gap:8px;align-items:center;}
+  .slot .row + .row{margin-top:8px;}
+  .slot .st{font-size:13px;color:var(--dim);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .slot .st.on{color:var(--green);}
+  .slot .conn{font-size:14px;padding:8px 12px;white-space:nowrap;}
+  .meter{flex:1;height:12px;border-radius:6px;background:var(--track);overflow:hidden;position:relative;}
+  .meter i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--green);border-radius:6px;transition:width .05s linear;}
+  .meter i.wrongdir{background:var(--gold);}
+  .dirtxt{font-size:13px;width:70px;text-align:right;color:var(--dim);}
+  .start-row{display:flex;gap:14px;flex-wrap:wrap;align-items:center;}
+  .start-row .note{color:var(--dim);font-size:14px;}
+  details{background:var(--panel);border-radius:12px;padding:10px 14px;}
+  summary{cursor:pointer;font-weight:700;color:var(--dim);}
+  .cfg{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px;}
+  .cfg label{display:flex;flex-direction:column;gap:5px;font-size:14px;color:var(--dim);}
+  .cfg label.ck{flex-direction:row;align-items:center;gap:8px;}
+  .cfg input[type=number],.cfg select{font-size:15px;padding:7px 9px;font-family:inherit;background:var(--track);color:var(--cream);border:2px solid transparent;border-radius:8px;}
+  .hint{font-size:14px;color:var(--dim);line-height:1.7;background:var(--track);border-radius:12px;padding:10px 14px;}
+  .hint b{color:var(--cream);}
+  kbd{background:var(--panel2);border-radius:5px;padding:1px 6px;font-family:inherit;color:var(--gold);}
+
+  /* ---------- 結果畫面 ---------- */
+  #result{background:#2a080e;}
+  #result .inner{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:16px;}
+  #result h1{margin:0;font-size:clamp(28px,4.5vw,46px);}
+  #result .sub{color:var(--dim);margin:0;font-size:16px;}
+  .rtable{width:100%;border-collapse:collapse;font-size:17px;background:var(--panel);border-radius:12px;overflow:hidden;}
+  .rtable th,.rtable td{padding:10px 12px;text-align:center;border-bottom:1px solid rgba(255,255,255,.07);}
+  .rtable th{background:var(--header);color:var(--dim);font-size:14px;font-weight:700;}
+  .rtable td.name{text-align:left;font-weight:700;}
+  .rtable td.big{font-size:22px;font-weight:900;color:var(--gold);}
+  .rtable td.tries{font-size:14px;color:var(--dim);}
+  .tdot{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:middle;}
+  .rbtns{display:flex;gap:12px;flex-wrap:wrap;}
+
+  #gameBar .turnchips{display:flex;gap:5px;}
+  #gameBar .tc{font-size:14px;font-weight:800;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    background:var(--panel);color:var(--dim);}
+  #gameBar .tc.cur{background:var(--gold);color:#3a0a10;}
+  #toast{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);background:var(--gold);color:#3a0a10;
+    font-weight:800;padding:10px 18px;border-radius:12px;font-size:15px;box-shadow:0 6px 18px rgba(0,0,0,.35);
+    opacity:0;transition:opacity .25s;pointer-events:none;max-width:90%;text-align:center;}
+  #toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="bar">
+    <a id="hubLink" href="/" class="hide" style="color:var(--dim);text-decoration:none;font-weight:700;font-size:14px">← 遊戲廳</a>
+    <span class="title">呼吸訓練管 · 雙人接力賽</span>
+    <span class="spacer"></span>
+    <span style="font-size:13px;color:var(--dim)">裝置</span>
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <div id="wrap">
+    <canvas id="cv"></canvas>
+
+    <!-- ======== 設定畫面 ======== -->
+    <div id="setup" class="overlay">
+      <div class="inner">
+        <div>
+          <h1>呼吸接力賽：龍舟 ／ 火箭</h1>
+          <p class="lead">四支呼吸訓練管接四台裝置。老師先分組：<b>1、2 號給第一組</b>，<b>3、4 號給第二組</b>。依序連接裝置、輸入姓名，再按開始。<br>
+          輪流順序：1 → 3 → 2 → 4 → 1 …，只有輪到的那台裝置會被讀入遊戲。<br>
+          先到終點的組會等另一組也抵達；<b>兩組都到終點後，比每次最大氣流的平均</b>決定勝負（跟誰先開始、吸幾次無關）。</p>
+        </div>
+
+        <div class="teams">
+          <div class="team" style="--c:var(--teamA)">
+            <h2>第一組 <small>紅色龍舟 / 紅色火箭</small></h2>
+            <div id="slots-A"></div>
+          </div>
+          <div class="team" style="--c:var(--teamB)">
+            <h2>第二組 <small>藍色龍舟 / 藍色火箭</small></h2>
+            <div id="slots-B"></div>
+          </div>
+        </div>
+
+        <div class="hint">
+          <b>確認裝置編號：</b>連上後對著管子呼吸，看哪一條的綠色條在動，就知道是幾號（右邊會顯示判斷到的是「吸」還是「吹」）。<br>
+          <b>沒有裝置也能試玩：</b>設定畫面按住 <kbd>1</kbd>~<kbd>4</kbd> 模擬對應裝置；遊戲中按住 <kbd>空白鍵</kbd> 模擬目前輪到的人（按越久氣流越大）。
+        </div>
+
+        <div class="start-row">
+          <button class="btn-gold btn-lg" id="startInhale">🐉 開始：吸氣 · 龍舟賽</button>
+          <button class="btn-gold btn-lg" id="startExhale" style="background:#9fd4ff">🚀 開始：吹氣 · 火箭賽</button>
+          <span class="note" id="connNote"></span>
+        </div>
+
+        <details>
+          <summary>進階設定（裝置實測後可微調）</summary>
+          <div class="cfg">
+            <label>每次呼吸計時（秒）<input type="number" id="cfgDur" min="1" max="15" step="0.5"></label>
+            <label>終點格數<input type="number" id="cfgGoal" min="3" max="30" step="1"></label>
+            <label>參考氣流（最大氣流 = 這個值時前進 1 格）<input type="number" id="cfgRef" min="5" max="300" step="1"></label>
+            <label>每次最少前進（格）<input type="number" id="cfgMin" min="0" max="3" step="0.1"></label>
+            <label>每次最多前進（格）<input type="number" id="cfgMax" min="0.5" max="10" step="0.1"></label>
+            <label>開始門檻（氣流超過才算開始）<input type="number" id="cfgOnset" min="1" max="100" step="1"></label>
+            <label>平滑程度（秒，越大越穩、反應越慢）<input type="number" id="cfgSmooth" min="0" max="2" step="0.05"></label>
+            <label>下降延時（秒，氣流變小後先停住多久）<input type="number" id="cfgHold" min="0" max="3" step="0.1"></label>
+            <label>勝負判定（兩組都到終點後）<select id="cfgWin">
+              <option value="avg">每次最大氣流平均，大者勝（建議）</option>
+              <option value="sum">每次最大氣流加總，大者勝</option>
+            </select></label>
+            <label class="ck"><input type="checkbox" id="cfgStrict"> 嚴格判斷方向（吸氣輪只算吸氣、吹氣輪只算吹氣）</label>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- ======== 結果畫面 ======== -->
+    <div id="result" class="overlay hide">
+      <div class="inner">
+        <h1 id="rTitle">第一組獲勝！</h1>
+        <p class="sub" id="rSub"></p>
+        <table class="rtable" id="rTeam"></table>
+        <table class="rtable" id="rTable"></table>
+        <div class="rbtns">
+          <button class="btn-gold btn-lg" id="rNext">🚀 下一輪：吹氣 · 火箭賽</button>
+          <button class="btn-dk btn-lg" id="rAgain">再玩一次</button>
+          <button class="btn-dk btn-lg" id="rCsv">匯出成績 CSV</button>
+          <button class="btn-dk btn-lg" id="rSetup">回到設定</button>
+        </div>
+      </div>
+    </div>
+    <div id="toast"></div>
+  </div>
+
+  <div id="gameBar" class="bar hide">
+    <button id="gBack" class="btn-dk btn-md">← 回設定</button>
+    <span style="color:var(--dim);font-size:14px">順序</span>
+    <div class="turnchips" id="turnChips"></div>
+    <span class="spacer"></span>
+    <button id="gSkip" class="btn-dk btn-md">跳過這位</button>
+    <button id="gRestart" class="btn-red btn-md">重新開始</button>
+  </div>
+</div>
+
+<script type="module">
+// 呼吸演算法直接引用網站上的 breath_algorithm.js（跟其他遊戲同一份）
+import { analyze, parseFFTLine } from "./breath_algorithm.js";
+// =====================================================================
+//  設定
+// =====================================================================
+const DEFAULT_CFG = { dur:5, goal:10, ref:50, minAdv:0.3, maxAdv:3, onset:12, strict:true, smooth:0.25, hold:0.4, win:"avg", winVer:2 };
+const store = {
+  get(k,def){ try{ const v=localStorage.getItem("relay_"+k); return v==null?def:JSON.parse(v); }catch{ return def; } },
+  set(k,v){ try{ localStorage.setItem("relay_"+k, JSON.stringify(v)); }catch{} },
+};
+const _savedCfg = store.get("cfg", {}) || {};
+if(_savedCfg.winVer!==2){ _savedCfg.win="avg"; _savedCfg.winVer=2; }   // 舊設定一律改成「平均」
+const CFG = Object.assign({}, DEFAULT_CFG, _savedCfg);
+// ---------- 雲端紀錄（只有放在網站上、用 http(s) 開啟時才上傳；本機雙擊開啟不上傳） ----------
+const CLOUD = /^https?:$/.test(location.protocol);
+const LOG_ENDPOINT = "/api/log";
+function uploadLog(payload){
+  if(!CLOUD) return;
+  fetch(LOG_ENDPOINT, { method:"POST", headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ ts:Date.now(), ...payload }) }).catch(err=>console.warn("上傳失敗（不影響遊戲）", err));
+}
+function gameKey(){ return G && G.mode==="exhale" ? "relay_rocket" : "relay_boat"; }
+function downsample(arr, n){ if(arr.length<=n) return arr; const out=[], st=arr.length/n; for(let i=0;i<n;i++) out.push(arr[Math.floor(i*st)]); return out; }
+// 每一次呼吸：上傳這個人的波形（未平滑）與最大氣流
+function cloudAttempt(id, maxFlow, series){
+  uploadLog({ type:"attempt", name:displayName(id), game:gameKey(), key:"max_flow", value:maxFlow,
+    duration:CFG.dur, series:downsample(series, 150) });
+}
+// 一場結束：每人的最大氣流 + 整場結果
+function cloudGameEnd(h){
+  const game = h.mode==="exhale" ? "relay_rocket" : "relay_boat";
+  for(const id of [1,2,3,4]){
+    const vals=h.records[id].filter(v=>v!=null);
+    if(vals.length) uploadLog({ type:"score", name:h.names[id], game, key:game+"_max", value:Math.max(...vals) });
+  }
+  uploadLog({ type:"relay_result", name:"接力賽", game, value:{
+    winner: h.winner==="tie" ? "平手" : TEAMS[h.winner].name, rule: h.rule==="avg"?"平均":"加總",
+    arrive: h.arrive.map(k=>TEAMS[k].name),
+    teamA:{ members:[h.names[1],h.names[2]], ...teamStats(h.records,"A") },
+    teamB:{ members:[h.names[3],h.names[4]], ...teamStats(h.records,"B") },
+    records:{ [h.names[1]]:h.records[1], [h.names[2]]:h.records[2], [h.names[3]]:h.records[3], [h.names[4]]:h.records[4] } } });
+}
+const EXHALE_BIAS_WINDOW = 0.4;   // 吹氣輪：0.4 秒內出現過吐氣就算吐氣（沿用原專案的偏向修正）
+const ORDER = [1,3,2,4];
+const TEAM_OF = {1:"A",2:"A",3:"B",4:"B"};
+const TEAMS = {
+  A:{ name:"第一組", color:"#ff5a3c", dark:"#a8301c", light:"#ffb39f", members:[1,2] },
+  B:{ name:"第二組", color:"#3d9bff", dark:"#1d5aa8", light:"#a9d3ff", members:[3,4] },
+};
+
+// =====================================================================
+//  四台裝置（Web Serial，各自一個 port）
+// =====================================================================
+const devs = {};
+for(const id of [1,2,3,4]) devs[id] = { id, port:null, reader:null, reading:false, lastFFT:null, lastTs:-99,
+  lastExh:-99, sim:0, simHeld:false, name:"", sm:0, peakT:-99 };
+
+function supported(){ return "serial" in navigator; }
+
+async function connectDev(d){
+  if(d.port){ await disconnectDev(d); return; }
+  if(!supported()){ toast("這個瀏覽器不支援 Web Serial，請用 Chrome 或 Edge 開啟"); return; }
+  let port;
+  try{ port = await navigator.serial.requestPort(); }catch{ return; }
+  const other = Object.values(devs).find(x=>x.port===port);
+  if(other){ toast(`這個連接埠已經是 ${other.id} 號了，請選另一個`); return; }
+  try{ await port.open({ baudRate:115200 }); }
+  catch(err){ toast("連接埠打不開（可能被其他程式占用）：" + err.message); return; }
+  d.port=port; d.reading=true; d.lastTs=-99;
+  refreshSlot(d);
+  readLoop(d);
+}
+async function disconnectDev(d){
+  d.reading=false;
+  try{ if(d.reader){ await d.reader.cancel(); d.reader.releaseLock(); } }catch{}
+  try{ if(d.port){ await d.port.close(); } }catch{}
+  d.port=null; d.reader=null; d.lastFFT=null; d.lastTs=-99;
+  refreshSlot(d);
+}
+async function readLoop(d){
+  const dec = new TextDecoderStream();
+  d.port.readable.pipeTo(dec.writable).catch(()=>{});
+  d.reader = dec.readable.getReader(); let buf="";
+  while(d.reading){
+    let r; try{ r=await d.reader.read(); }catch{ break; }
+    if(r.done) break;
+    buf += r.value; let i;
+    while((i=buf.indexOf("\n"))>=0){
+      const ln=buf.slice(0,i).trim(); buf=buf.slice(i+1);
+      const b=parseFFTLine(ln); if(b){ d.lastFFT=b; d.lastTs=performance.now()/1000; }
+    }
+    if(buf.length>8000) buf="";
+  }
+}
+if(supported()){
+  navigator.serial.addEventListener("disconnect", e=>{
+    const d=Object.values(devs).find(x=>x.port===e.target);
+    if(d){ d.reading=false; d.port=null; d.reader=null; d.lastFFT=null; refreshSlot(d); toast(`${d.id} 號裝置已拔除`); }
+  });
+}
+
+// 讀某台裝置目前的氣流。mode = "inhale" / "exhale"
+function readFlow(d, now, mode){
+  const want = mode==="exhale" ? "exhalation" : "inhalation";
+  if(d.sim>1) return { flow:d.sim, raw:d.sim, dir:want, wrong:false };
+  if(!(d.lastFFT && now-d.lastTs<0.3)) return { flow:0, raw:0, dir:null, wrong:false };
+  const a = analyze(d.lastFFT);
+  if(!a.active) return { flow:0, raw:0, dir:null, wrong:false };
+  let dir=a.direction;
+  if(dir==="exhalation") d.lastExh=now;
+  if(mode==="exhale" && now-d.lastExh<=EXHALE_BIAS_WINDOW) dir="exhalation";
+  if(!CFG.strict || dir===want) return { flow:a.flow, raw:a.flow, dir, wrong:false };
+  return { flow:0, raw:a.flow, dir, wrong:a.flow>=CFG.onset };
+}
+// 平滑化 + 延時：上升時用時間常數 smooth 跟上；下降時先停住 hold 秒，再用較慢的速度降下來
+function smoothFlow(d, x, dt, now){
+  const tauUp = Math.max(0.01, CFG.smooth), tauDown = Math.max(0.05, CFG.smooth*2.5);
+  if(x >= d.sm){
+    d.sm += (x - d.sm) * (1 - Math.exp(-dt/tauUp));
+    d.peakT = now;
+  } else if(now - d.peakT > CFG.hold){
+    d.sm += (x - d.sm) * (1 - Math.exp(-dt/tauDown));
+  }
+  if(d.sm < 0.5) d.sm = 0;
+  return d.sm;
+}
+function isLive(d, now){ return d.sim>1 || (d.lastFFT && now-d.lastTs<1.0); }
+
+// =====================================================================
+//  設定畫面 UI
+// =====================================================================
+const $ = (id)=>document.getElementById(id);
+const slotEls = {};
+function buildSlots(){
+  for(const id of [1,2,3,4]){
+    const t = TEAM_OF[id];
+    const el = document.createElement("div");
+    el.className="slot";
+    el.innerHTML = `
+      <div class="badge">${id}</div>
+      <div>
+        <div class="row">
+          <input type="text" maxlength="10" placeholder="${id} 號使用者姓名" />
+          <button class="btn-gold conn">連接裝置</button>
+        </div>
+        <div class="row">
+          <span class="st">未連線</span>
+          <div class="meter"><i></i></div>
+          <span class="dirtxt">—</span>
+        </div>
+      </div>`;
+    $("slots-"+t).appendChild(el);
+    const inp = el.querySelector("input");
+    inp.value = store.get("name"+id, "") || "";
+    devs[id].name = inp.value.trim();
+    inp.addEventListener("input", ()=>{ devs[id].name=inp.value.trim(); store.set("name"+id, devs[id].name); });
+    inp.addEventListener("keydown", e=>e.stopPropagation());
+    el.querySelector(".conn").onclick = ()=>connectDev(devs[id]);
+    slotEls[id] = { el, inp, btn:el.querySelector(".conn"), st:el.querySelector(".st"),
+      bar:el.querySelector(".meter i"), dir:el.querySelector(".dirtxt") };
+  }
+  const chips=$("chips");
+  for(const id of [1,2,3,4]){ const c=document.createElement("span"); c.className="chip"; c.textContent=id+"號"; c.id="chip"+id; chips.appendChild(c); }
+}
+function refreshSlot(d){
+  const s=slotEls[d.id]; if(!s) return;
+  if(d.port){ s.btn.textContent="斷線"; s.btn.className="btn-dk conn"; }
+  else { s.btn.textContent="連接裝置"; s.btn.className="btn-gold conn"; }
+  updateConnNote();
+}
+function updateConnNote(){
+  const n = Object.values(devs).filter(d=>d.port).length;
+  $("connNote").textContent = n===4 ? "4 台裝置都已連線 ✓" : `已連線 ${n} / 4 台（未連線的可用空白鍵代替）`;
+}
+function updateSetupMeters(now){
+  for(const id of [1,2,3,4]){
+    const d=devs[id], s=slotEls[id];
+    const live=isLive(d,now);
+    if(d.port) { s.st.textContent = live? "● 收到資料" : "● 已連線，等待資料…"; s.st.className = "st"+(live?" on":""); }
+    else if(d.sim>1) { s.st.textContent="● 鍵盤模擬中"; s.st.className="st on"; }
+    else { s.st.textContent="未連線"; s.st.className="st"; }
+    // 設定畫面不限方向，顯示原始氣流與判斷方向
+    let flow=0, dir=null;
+    if(d.sim>1){ flow=d.sim; dir="inhalation"; }
+    else if(d.lastFFT && now-d.lastTs<0.3){ const a=analyze(d.lastFFT); if(a.active){ flow=a.flow; dir=a.direction; } }
+    flow = smoothFlow(d, flow, 1/60, now);
+    s.bar.style.width = Math.min(100, flow/ (CFG.ref*3) * 100) + "%";
+    s.bar.className = "";
+    s.dir.textContent = dir==="inhalation" ? `吸 ${Math.round(flow)}` : dir==="exhalation" ? `吹 ${Math.round(flow)}` : "—";
+  }
+}
+function updateChips(now){
+  for(const id of [1,2,3,4]){
+    const c=$("chip"+id), d=devs[id];
+    c.className = "chip" + (d.port?" on":"") + (isLive(d,now)?" live":"");
+  }
+}
+function loadCfgUI(){
+  $("cfgDur").value=CFG.dur; $("cfgGoal").value=CFG.goal; $("cfgRef").value=CFG.ref;
+  $("cfgMin").value=CFG.minAdv; $("cfgMax").value=CFG.maxAdv; $("cfgOnset").value=CFG.onset; $("cfgStrict").checked=CFG.strict; $("cfgSmooth").value=CFG.smooth; $("cfgHold").value=CFG.hold; $("cfgWin").value=CFG.win;
+}
+function readCfgUI(){
+  const num=(id,def,lo,hi)=>{ const v=parseFloat($(id).value); return Number.isFinite(v)? Math.max(lo,Math.min(hi,v)) : def; };
+  CFG.dur=num("cfgDur",5,1,15); CFG.goal=Math.round(num("cfgGoal",10,3,30)); CFG.ref=num("cfgRef",50,5,300);
+  CFG.minAdv=num("cfgMin",0.3,0,3); CFG.maxAdv=num("cfgMax",3,0.5,10); CFG.onset=num("cfgOnset",12,1,100);
+  CFG.smooth=num("cfgSmooth",0.25,0,2); CFG.hold=num("cfgHold",0.4,0,3); CFG.win = $("cfgWin").value==="sum" ? "sum" : "avg"; CFG.winVer=2;
+  if(CFG.maxAdv<CFG.minAdv) CFG.maxAdv=CFG.minAdv;
+  CFG.strict=$("cfgStrict").checked; store.set("cfg",CFG); loadCfgUI();
+}
+
+let toastTimer=null;
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"), 2800); }
+
+// =====================================================================
+//  遊戲狀態
+// =====================================================================
+let screen="setup";    // setup | game | result
+let G=null;
+const history=[];      // 全部回合的紀錄（匯出 CSV 用）
+
+function displayName(id){ return devs[id].name || `${id}號`; }
+
+function newGame(mode){
+  readCfgUI();
+  for(const id of [1,2,3,4]){ devs[id].sm=0; devs[id].peakT=-99; }
+  G = {
+    mode,                          // inhale | exhale
+    theme: mode==="inhale" ? "boat" : "rocket",
+    idx:0, phase:"intro", t:0,
+    pos:{A:0,B:0}, disp:{A:0,B:0},
+    curFlow:0, maxFlow:0, rawFlow:0, wrong:false, onsetT:0,
+    lastAdv:0, winner:null, finished:{A:false,B:false}, arrive:[], banner:null,
+    series:[], cloudLogged:false,
+    rowPhase:{1:0,2:0,3:0,4:0},
+    records:{1:[],2:[],3:[],4:[]},
+    confetti:[], puffs:[], splash:[], shake:0,
+    startedAt:new Date(),
+  };
+  screen="game";
+  $("setup").classList.add("hide"); $("result").classList.add("hide"); $("gameBar").classList.remove("hide");
+  buildTurnChips(); resize();
+  uploadLog({ type:"game_start", name:[1,2,3,4].map(displayName).join("、"), game:gameKey() });
+}
+function curId(){ return ORDER[G.idx % ORDER.length]; }
+// 下一位：跳過已經抵達終點的組
+function nextTurn(){
+  for(let k=0;k<ORDER.length;k++){ G.idx++; if(!G.finished[TEAM_OF[curId()]]) break; }
+}
+function teamStats(records, team){
+  const vals=[]; for(const id of TEAMS[team].members) for(const v of records[id]) if(v!=null) vals.push(v);
+  const sum=vals.reduce((a,b)=>a+b,0);
+  return { n:vals.length, sum, avg: vals.length? sum/vals.length : 0 };
+}
+function decideWinner(records, rule){
+  const a=teamStats(records,"A"), b=teamStats(records,"B");
+  const ka = rule==="avg"? a.avg : a.sum, kb = rule==="avg"? b.avg : b.sum;
+  if(Math.round(ka*10)===Math.round(kb*10)) return "tie";
+  return ka>kb ? "A" : "B";
+}
+function verb(){ return G.mode==="inhale" ? "吸氣" : "吹氣"; }
+
+function buildTurnChips(){
+  const box=$("turnChips"); box.innerHTML="";
+  ORDER.forEach((id,i)=>{ const c=document.createElement("div"); c.className="tc"; c.textContent=id;
+    c.style.borderBottom=`3px solid ${TEAMS[TEAM_OF[id]].color}`; c.dataset.i=i; box.appendChild(c); });
+}
+function updateTurnChips(){
+  const cur = G ? (G.idx % ORDER.length) : -1;
+  document.querySelectorAll("#turnChips .tc").forEach(c=>{
+    c.classList.toggle("cur", +c.dataset.i===cur && G.phase!=="done");
+    c.style.opacity = G && G.finished[TEAM_OF[ORDER[+c.dataset.i]]] ? .3 : 1; });
+}
+
+function finishTurn(skipped){
+  const id=curId(), team=TEAM_OF[id];
+  let adv=0;
+  if(!skipped){
+    adv = Math.max(CFG.minAdv, Math.min(CFG.maxAdv, G.maxFlow/CFG.ref));
+    adv = Math.round(adv*10)/10;
+  }
+  G.lastAdv=adv;
+  G.records[id].push(skipped? null : Math.round(G.maxFlow));
+  if(!skipped) cloudAttempt(id, Math.round(G.maxFlow), G.series);
+  G.pos[team] = Math.min(CFG.goal, G.pos[team]+adv);
+  G.phase="move"; G.t=0;
+  if(G.theme==="rocket" && adv>0){ for(let i=0;i<14;i++) G.puffs.push({team, x:(Math.random()-0.5)*40, y:0, vx:(Math.random()-0.5)*60, vy:20+Math.random()*40, r:8+Math.random()*10, life:1}); }
+}
+function endGame(){
+  const winner = decideWinner(G.records, CFG.win);
+  G.winner=winner; G.phase="done"; G.t=0; G.banner=null;
+  const wc = winner==="tie" ? "#ffd24a" : TEAMS[winner].color;
+  for(let i=0;i<120;i++) G.confetti.push({x:Math.random(), y:-Math.random()*0.5, vy:0.15+Math.random()*0.25,
+    vx:(Math.random()-0.5)*0.1, rot:Math.random()*6, col:[wc,"#ffd24a","#fff3df","#7fe08d"][i%4], sz:5+Math.random()*6});
+  const h = { mode:G.mode, theme:G.theme, winner, rule:CFG.win, time:G.startedAt, arrive:[...G.arrive],
+    names:{1:displayName(1),2:displayName(2),3:displayName(3),4:displayName(4)},
+    records:JSON.parse(JSON.stringify(G.records)), pos:{...G.pos} };
+  history.push(h);
+  cloudGameEnd(h);
+  setTimeout(()=>{ if(screen==="game" && G && G.phase==="done") showResult(); }, 2600);
+}
+
+function update(dt, now){
+  if(!G) return;
+  const id=curId(), d=devs[id];
+  // 只讀輪到的那台裝置
+  const r = readFlow(d, now, G.mode);
+  const rawEff = r.flow;                       // 沒有平滑的氣流：用來算最大氣流（跟網頁版一致）
+  r.flow = smoothFlow(d, r.flow, dt, now);     // 平滑後的氣流：用在畫面顯示與偵測開始
+  G.curFlow=r.flow; G.rawFlow=r.raw; G.wrong=r.wrong;
+  G.t += dt;
+
+  if(G.phase==="intro"){
+    G.curFlow=0;
+    if(G.t>(G.banner && G.banner.t<2.2 ? 2.2 : 1.2)){ G.phase="wait"; G.t=0; G.onsetT=0; G.maxFlow=0; }
+  } else if(G.phase==="wait"){
+    if(r.flow>=CFG.onset){ G.onsetT+=dt; if(G.onsetT>=0.1){ G.phase="active"; G.t=0; G.maxFlow=rawEff; G.series=[]; } }
+    else G.onsetT=0;
+  } else if(G.phase==="active"){
+    G.maxFlow=Math.max(G.maxFlow, rawEff);
+    G.series.push({ t:+G.t.toFixed(2), f:Math.round(rawEff), d: G.mode==="inhale"?1:-1 });
+    // 手臂划槳：氣流越大划越快，沒氣流時也維持慢速划動
+    G.rowPhase[id] += dt*(3 + Math.min(1, r.flow/(CFG.ref*1.5))*9);
+    if(G.t>=CFG.dur) finishTurn(false);
+  } else if(G.phase==="move"){
+    if(G.t>=1.6){
+      const team=TEAM_OF[id];
+      G.disp[team]=G.pos[team];
+      if(G.pos[team]>=CFG.goal && !G.finished[team]){
+        G.finished[team]=true; G.arrive.push(team);
+        G.banner={ text:`${TEAMS[team].name} 抵達終點！`, sub: G.arrive.length<2 ? `等 ${TEAMS[team==="A"?"B":"A"].name} 完成` : "兩組都到了，準備頒獎", col:TEAMS[team].color, t:0 };
+      }
+      if(G.finished.A && G.finished.B){ endGame(); }
+      else { nextTurn(); G.phase="intro"; G.t=0; G.maxFlow=0; const nd=devs[curId()]; nd.sm=0; nd.peakT=-99; }
+    }
+  }
+  // 平滑移動
+  for(const t of ["A","B"]){
+    const diff=G.pos[t]-G.disp[t];
+    G.disp[t] += diff*Math.min(1, dt*3.2);
+    if(Math.abs(diff)<0.002) G.disp[t]=G.pos[t];
+  }
+  if(G.banner){ G.banner.t+=dt; if(G.banner.t>2.6 && G.phase!=="done") G.banner=null; }
+  // 粒子
+  for(const p of G.puffs){ p.life-=dt*0.7; p.x+=p.vx*dt; p.y+=p.vy*dt; p.r+=dt*14; }
+  G.puffs=G.puffs.filter(p=>p.life>0);
+  for(const c of G.confetti){ c.y+=c.vy*dt; c.x+=c.vx*dt; c.rot+=dt*5; }
+  if(G.phase==="active" && G.theme==="boat" && Math.random()<dt*10*(0.3+Math.min(1,r.flow/CFG.ref)))
+    G.splash.push({team:TEAM_OF[id], life:0.6, x:Math.random(), vy:-40-Math.random()*50, y:0});
+  for(const s of G.splash){ s.life-=dt; s.y+=s.vy*dt; s.vy+=160*dt; }
+  G.splash=G.splash.filter(s=>s.life>0);
+}
+
+// =====================================================================
+//  結果畫面
+// =====================================================================
+function showResult(){
+  screen="result";
+  const h=history[history.length-1];
+  $("rTitle").innerHTML = h.winner==="tie" ? `<span style="color:#ffd24a">平手！</span>` :
+    `<span style="color:${TEAMS[h.winner].color}">${TEAMS[h.winner].name}</span> 獲勝！`;
+  $("rSub").textContent = `${h.mode==="inhale"?"吸氣 · 龍舟賽":"吹氣 · 火箭賽"} ｜ 勝負：每次最大氣流${h.rule==="avg"?"平均":"加總"}較大者勝 ｜ 氣流為裝置的流量指數（未平滑的瞬間峰值）`;
+  let th = `<tr><th>組別</th><th>抵達順序</th><th>${h.mode==="inhale"?"吸氣":"吹氣"}次數</th><th>每次最大氣流加總</th><th>每次最大氣流平均</th></tr>`;
+  for(const k of ["A","B"]){
+    const st=teamStats(h.records,k), T=TEAMS[k], ord=h.arrive.indexOf(k);
+    const hiSum = h.rule!=="avg" && h.winner===k, hiAvg = h.rule==="avg" && h.winner===k;
+    th += `<tr><td class="name"><span class="tdot" style="background:${T.color}"></span>${T.name}${h.winner===k?" 🏆":""}</td>
+      <td>${ord>=0? "第 "+(ord+1)+" 個" : "—"}</td><td>${st.n}</td>
+      <td class="${hiSum?"big":""}" style="${hiSum?"":"font-weight:800"}">${st.sum}</td>
+      <td class="${hiAvg?"big":""}" style="${hiAvg?"":"font-weight:800"}">${Math.round(st.avg)}</td></tr>`;
+  }
+  $("rTeam").innerHTML=th;
+  let html = `<tr><th>編號</th><th>姓名</th><th>組別</th><th>${h.mode==="inhale"?"吸氣":"吹氣"}次數</th><th>最大氣流</th><th>平均</th><th>每次的最大氣流</th></tr>`;
+  for(const id of [1,2,3,4]){
+    const rec=h.records[id], vals=rec.filter(v=>v!=null);
+    const mx = vals.length? Math.max(...vals) : "—";
+    const avg = vals.length? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : "—";
+    const T=TEAMS[TEAM_OF[id]];
+    html += `<tr><td style="font-weight:900;font-size:20px">${id}</td><td class="name">${esc(h.names[id])}</td>
+      <td><span class="tdot" style="background:${T.color}"></span>${T.name}</td><td>${vals.length}</td>
+      <td class="big">${mx}</td><td>${avg}</td><td class="tries">${rec.map(v=>v==null?"略過":v).join("、")||"—"}</td></tr>`;
+  }
+  $("rTable").innerHTML=html;
+  $("rNext").textContent = h.mode==="inhale" ? "🚀 下一輪：吹氣 · 火箭賽" : "🐉 下一輪：吸氣 · 龍舟賽";
+  $("rNext").dataset.mode = h.mode==="inhale" ? "exhale" : "inhale";
+  $("rAgain").dataset.mode = h.mode;
+  $("result").classList.remove("hide"); $("gameBar").classList.add("hide");
+}
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function exportCSV(){
+  const rows=[["日期時間","輪次","遊戲","編號","姓名","組別","次數","最大氣流","平均氣流","每次最大氣流","組別氣流加總","組別氣流平均","勝負判定","勝隊"]];
+  history.forEach((h,k)=>{
+    for(const id of [1,2,3,4]){
+      const rec=h.records[id], vals=rec.filter(v=>v!=null);
+      rows.push([fmtTime(h.time), k+1, h.mode==="inhale"?"吸氣龍舟":"吹氣火箭", id, h.names[id], TEAMS[TEAM_OF[id]].name,
+        vals.length, vals.length?Math.max(...vals):"", vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):"",
+        rec.map(v=>v==null?"略過":v).join(" / "), teamStats(h.records,TEAM_OF[id]).sum, Math.round(teamStats(h.records,TEAM_OF[id]).avg),
+        h.rule==="avg"?"平均":"加總", h.winner==="tie"?"平手":TEAMS[h.winner].name]);
+    }
+  });
+  const csv="﻿"+rows.map(r=>r.map(x=>{ const s=String(x); return /[",\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s; }).join(",")).join("\r\n");
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download=`呼吸接力賽_${fmtTime(new Date()).replace(/[: ]/g,"-")}.csv`; a.click();
+}
+function fmtTime(t){ const p=n=>String(n).padStart(2,"0");
+  return `${t.getFullYear()}-${p(t.getMonth()+1)}-${p(t.getDate())} ${p(t.getHours())}:${p(t.getMinutes())}`; }
+
+// =====================================================================
+//  繪圖
+// =====================================================================
+const cv=$("cv"), ctx=cv.getContext("2d");
+function resize(){ const r=cv.getBoundingClientRect(), dpr=devicePixelRatio||1;
+  cv.width=Math.max(1,r.width*dpr); cv.height=Math.max(1,r.height*dpr); ctx.setTransform(dpr,0,0,dpr,0,0); }
+addEventListener("resize", resize);
+const FONT='"Microsoft JhengHei UI","Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif';
+function text(t,x,y,size,c,align="center",bold=true){ ctx.fillStyle=c; ctx.textAlign=align; ctx.textBaseline="middle";
+  ctx.font=`${bold?"900 ":""}${size}px ${FONT}`; ctx.fillText(t,x,y); }
+function rrect(x,y,w,h,r){ r=Math.max(0,Math.min(r,w/2,h/2)); ctx.beginPath(); ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function tag(label, x, y, bg, fg, size=14){
+  ctx.font=`900 ${size}px ${FONT}`; const w=ctx.measureText(label).width+16, h=size+10;
+  rrect(x-w/2,y-h/2,w,h,h/2); ctx.fillStyle=bg; ctx.fill(); text(label,x,y+1,size,fg);
+}
+
+function render(now){
+  const w=cv.clientWidth, h=cv.clientHeight;
+  if(!G){ ctx.fillStyle="#43111a"; ctx.fillRect(0,0,w,h); return; }
+  const HUD=Math.min(210, Math.max(170, h*0.27));
+  if(G.theme==="boat") drawBoatScene(w,h,HUD,now); else drawRocketScene(w,h,HUD,now);
+  drawHUD(w,h,HUD,now);
+  // 抵達終點橫幅
+  if(G.banner){
+    const a=Math.min(1, G.banner.t*4, Math.max(0,(2.6-G.banner.t)*3));
+    ctx.globalAlpha=a; const bw=Math.min(560,w*0.8), bh=110, bx=w/2-bw/2, by=HUD+(h-HUD)/2-bh/2;
+    rrect(bx,by,bw,bh,20); ctx.fillStyle="rgba(30,6,10,.88)"; ctx.fill(); ctx.strokeStyle=G.banner.col; ctx.lineWidth=4; ctx.stroke();
+    text(G.banner.text, w/2, by+42, 34, G.banner.col); text(G.banner.sub, w/2, by+82, 18, "#fff3df");
+    ctx.globalAlpha=1;
+  }
+  // 彩帶
+  for(const c of G.confetti){ ctx.save(); ctx.translate(c.x*w, c.y*h); ctx.rotate(c.rot);
+    ctx.fillStyle=c.col; ctx.fillRect(-c.sz/2,-c.sz/4,c.sz,c.sz/2); ctx.restore(); }
+}
+
+// ---------------- HUD ----------------
+function drawHUD(w,h,H,now){
+  ctx.fillStyle="rgba(55,13,20,.92)"; ctx.fillRect(0,0,w,H);
+  const id=curId(), T=TEAMS[TEAM_OF[id]];
+  // 左右計分
+  const sw=Math.min(190, w*0.2);
+  for(const [k,x,al] of [["A",14,"left"],["B",w-14,"right"]]){
+    const TT=TEAMS[k];
+    const bx = al==="left"? x : x-sw;
+    rrect(bx,14,sw,H-28,14); ctx.fillStyle="rgba(0,0,0,.25)"; ctx.fill();
+    ctx.fillStyle=TT.color; rrect(bx,14,8,H-28,4); ctx.fill();
+    const st=teamStats(G.records,k), bh2=H-28;
+    text(TT.name + (G.finished[k]?" ✓":""), bx+sw/2+4, 14+bh2*0.15, 17, G.finished[k]?"#7fe08d":TT.light);
+    text(`${G.pos[k].toFixed(1)}`, bx+sw/2+4, 14+bh2*0.40, Math.min(42,H*0.22), "#fff");
+    text(`/ ${CFG.goal} 格`, bx+sw/2+4, 14+bh2*0.62, 14, "#e0b58f");
+    text(CFG.win==="avg" ? `平均氣流 ${Math.round(st.avg)}` : `氣流加總 ${st.sum}`, bx+sw/2+4, 14+bh2*0.85, 15, "#ffd24a");
+  }
+  // 中央指示
+  const cx=w/2;
+  const who = `${id}號 ${devs[id].name? devs[id].name+" " : ""}${verb()}`;
+  let sub="", subCol="#e0b58f";
+  if(G.phase==="intro"){ sub="準備…"; }
+  else if(G.phase==="wait"){ sub = G.wrong ? `方向不對喔，這輪是「${verb()}」` : `請開始${verb()}！`; subCol = G.wrong? "#ffd24a" : "#7fe08d"; }
+  else if(G.phase==="active"){ sub=`持續${verb()}… 剩 ${Math.max(0,CFG.dur-G.t).toFixed(1)} 秒`; subCol="#7fe08d"; }
+  else if(G.phase==="move"){ sub = G.lastAdv>0 ? `最大氣流 ${Math.round(G.maxFlow)} → 前進 ${G.lastAdv.toFixed(1)} 格！` : "略過，這次不前進"; subCol="#ffd24a"; }
+  else if(G.phase==="done"){ sub = CFG.win==="avg" ? "兩組都抵達！比較每次最大氣流的平均" : "兩組都抵達！比較每次最大氣流的加總"; subCol="#ffd24a"; }
+  const pulse = G.phase==="wait" ? 1+0.04*Math.sin(now*8) : 1;
+  const bigSize = Math.min(48, w*0.045, H*0.24)*pulse;
+  if(G.phase==="done") text(G.winner==="tie" ? "平手！" : `${TEAMS[G.winner].name} 獲勝！`, cx, H*0.22, bigSize, G.winner==="tie"?"#ffd24a":TEAMS[G.winner].color);
+  else text(who, cx, H*0.2, bigSize, T.color==="#3d9bff" ? "#7cc0ff" : "#ff8a70");
+  text(sub, cx, H*0.43, Math.min(24,w*0.024), subCol);
+
+  // 氣流條 + 計時條（放大版）
+  if(G.phase!=="done"){
+    const bw=Math.min(640, w-2*sw-250), bx=cx-bw/2, bh=Math.max(24, Math.min(34, H*0.17)), by=H*0.66;
+    const full=CFG.ref*3;
+    rrect(bx,by,bw,bh,bh/2); ctx.fillStyle="#2c0910"; ctx.fill();
+    ctx.strokeStyle="rgba(255,243,223,.25)"; ctx.lineWidth=2; ctx.stroke();
+    const showFlow = (G.phase==="wait"||G.phase==="active") ? G.curFlow : 0;
+    const fw=Math.min(1,showFlow/full)*bw;
+    if(fw>4){ rrect(bx,by,fw,bh,bh/2); ctx.fillStyle="#7fe08d"; ctx.fill(); }
+    // 1 格參考線
+    const refX=bx+bw*(CFG.ref/full); ctx.fillStyle="rgba(255,243,223,.7)"; ctx.fillRect(refX-1.5,by-4,3,bh+8);
+    text("1格", refX, by+bh+12, 12, "rgba(255,243,223,.75)");
+    // 最大值標記：粗黃條 + 上方三角形
+    if(G.maxFlow>0 && G.phase!=="intro"){
+      const mx=bx+Math.min(1,G.maxFlow/full)*bw;
+      ctx.fillStyle="#ffd24a"; rrect(mx-5,by-8,10,bh+16,4); ctx.fill();
+      ctx.strokeStyle="#3a0a10"; ctx.lineWidth=2; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(mx-11,by-20); ctx.lineTo(mx+11,by-20); ctx.lineTo(mx,by-8); ctx.closePath();
+      ctx.fillStyle="#ffd24a"; ctx.fill();
+    }
+    text(`氣流 ${Math.round(showFlow)}`, bx-14, by+bh/2, 20, "#7fe08d", "right");
+    text(`最大 ${Math.round(G.maxFlow)}`, bx+bw+14, by+bh/2, 20, "#ffd24a", "left");
+    // 計時
+    if(G.phase==="active"){
+      const ty=by+bh+22, th=10; rrect(bx,ty,bw,th,th/2); ctx.fillStyle="#2c0910"; ctx.fill();
+      rrect(bx,ty,bw*Math.max(0,1-G.t/CFG.dur),th,th/2); ctx.fillStyle="#ffb03a"; ctx.fill();
+    }
+  }
+}
+
+// ---------------- 龍舟 ----------------
+function drawBoatScene(w,h,HUD,now){
+  // 天空 + 遠山
+  const sky=ctx.createLinearGradient(0,HUD,0,h*0.45); sky.addColorStop(0,"#ffcf8a"); sky.addColorStop(1,"#ffe9c4");
+  ctx.fillStyle=sky; ctx.fillRect(0,HUD,w,h-HUD);
+  const riverTop = HUD + (h-HUD)*0.2;
+  ctx.fillStyle="#7aa66a"; ctx.beginPath(); ctx.moveTo(0,riverTop);
+  for(let x=0;x<=w;x+=20) ctx.lineTo(x, riverTop-18-14*Math.sin(x*0.01)-10*Math.sin(x*0.027+1));
+  ctx.lineTo(w,riverTop); ctx.fill();
+  ctx.fillStyle="#5d8f55"; ctx.beginPath(); ctx.moveTo(0,riverTop);
+  for(let x=0;x<=w;x+=20) ctx.lineTo(x, riverTop-6-8*Math.sin(x*0.018+2));
+  ctx.lineTo(w,riverTop); ctx.fill();
+  // 河
+  const rg=ctx.createLinearGradient(0,riverTop,0,h); rg.addColorStop(0,"#3b8fb8"); rg.addColorStop(1,"#1f5f87");
+  ctx.fillStyle=rg; ctx.fillRect(0,riverTop,w,h-riverTop);
+  // 波紋
+  ctx.strokeStyle="rgba(255,255,255,.18)"; ctx.lineWidth=2;
+  for(let i=0;i<14;i++){ const yy=riverTop+20+i*(h-riverTop)/14; const off=(now*30+i*53)%80;
+    ctx.beginPath(); for(let x=-80+off;x<w;x+=80){ ctx.moveTo(x,yy); ctx.quadraticCurveTo(x+10,yy-4,x+20,yy); } ctx.stroke(); }
+
+  const L = Math.max(150, Math.min(260, w*0.19));
+  const x0 = 24 + L + 30, x1 = w - 70;
+  const xOf = (p)=> x0 + (x1-x0)*(p/CFG.goal);
+  const riverH = h-riverTop;
+  const lanes = { A: riverTop + riverH*0.36, B: riverTop + riverH*0.82 };
+  // 分道浮標線
+  const midY = riverTop + riverH*0.57;
+  for(let x=10;x<w;x+=26){ ctx.fillStyle = (Math.floor(x/26)%2)?"#ffd24a":"#e6402f"; ctx.beginPath(); ctx.arc(x,midY,4,0,6.283); ctx.fill(); }
+  // 格線
+  for(let i=0;i<=CFG.goal;i++){
+    const x=xOf(i);
+    ctx.strokeStyle= i===0? "rgba(255,255,255,.55)" : "rgba(255,255,255,.18)"; ctx.lineWidth=2; ctx.setLineDash([6,8]);
+    ctx.beginPath(); ctx.moveTo(x,riverTop+6); ctx.lineTo(x,h-8); ctx.stroke(); ctx.setLineDash([]);
+    tag(String(i), x, riverTop+14, "rgba(0,0,0,.35)", "#fff", 12);
+  }
+  // 終點格子旗
+  const fx=xOf(CFG.goal), sq=10;
+  for(let y=riverTop+28, r=0; y<h; y+=sq, r++) for(let c=0;c<2;c++){ ctx.fillStyle=((r+c)%2)?"#111":"#fff"; ctx.fillRect(fx-sq+c*sq,y,sq,sq); }
+  tag("終點", fx, riverTop-14, "#e6402f", "#fff", 14);
+
+  for(const k of ["A","B"]){
+    const nose = xOf(G.disp[k]);
+    drawBoat(nose, lanes[k], L, k, now);
+  }
+  // 水花
+  for(const s of G.splash){
+    const k=s.team, nose=xOf(G.disp[k]);
+    ctx.globalAlpha=Math.max(0,s.life/0.6); ctx.fillStyle="#e8f6ff";
+    ctx.beginPath(); ctx.arc(nose - L*(0.25+0.55*s.x), lanes[k]+4+s.y, 3, 0, 6.283); ctx.fill(); ctx.globalAlpha=1;
+  }
+}
+
+function drawBoat(x, y, L, k, now){
+  const T=TEAMS[k];
+  const bob = Math.sin(now*2 + (k==="A"?0:1.7))*2;
+  y += bob;
+  ctx.save();
+  // 倒影 / 陰影
+  ctx.fillStyle="rgba(0,0,0,.18)"; ctx.beginPath(); ctx.ellipse(x-L*0.5, y+16, L*0.55, 7, 0, 0, 6.283); ctx.fill();
+  // 尾巴（捲曲）
+  ctx.strokeStyle=T.color; ctx.lineWidth=7; ctx.lineCap="round";
+  ctx.beginPath(); ctx.moveTo(x-L+6,y-12); ctx.quadraticCurveTo(x-L-22,y-26,x-L-12,y-46);
+  ctx.quadraticCurveTo(x-L-2,y-56,x-L-10,y-60); ctx.stroke();
+  ctx.fillStyle="#ffd24a"; ctx.beginPath(); ctx.moveTo(x-L-10,y-60); ctx.lineTo(x-L-24,y-70); ctx.lineTo(x-L-4,y-66); ctx.fill();
+  // 船身
+  ctx.beginPath();
+  ctx.moveTo(x-L, y-16);
+  ctx.lineTo(x-6, y-14);
+  ctx.quadraticCurveTo(x-L*0.12, y+12, x-L*0.5, y+12);
+  ctx.quadraticCurveTo(x-L*0.9, y+12, x-L, y-16);
+  ctx.closePath(); ctx.fillStyle=T.color; ctx.fill();
+  ctx.lineWidth=2.5; ctx.strokeStyle=T.dark; ctx.stroke();
+  // 鱗片
+  ctx.save(); ctx.clip();
+  ctx.strokeStyle="rgba(255,255,255,.35)"; ctx.lineWidth=2;
+  for(let i=0;i<Math.floor(L/16);i++){ const sx=x-L+10+i*16; ctx.beginPath(); ctx.arc(sx, y-2, 7, 0, Math.PI); ctx.stroke(); }
+  ctx.restore();
+  // 金邊甲板
+  ctx.strokeStyle="#ffd24a"; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(x-L+2,y-16); ctx.lineTo(x-8,y-14); ctx.stroke();
+  // 龍頸 + 龍頭
+  ctx.strokeStyle=T.color; ctx.lineWidth=12; ctx.lineCap="round";
+  ctx.beginPath(); ctx.moveTo(x-14,y-14); ctx.quadraticCurveTo(x+4,y-24,x+2,y-42); ctx.stroke();
+  const hx=x+12, hy=y-48;
+  ctx.fillStyle=T.color; ctx.beginPath(); ctx.ellipse(hx,hy,18,13,0.15,0,6.283); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(hx+8,hy-6); ctx.lineTo(hx+30,hy+2); ctx.lineTo(hx+26,hy+10); ctx.lineTo(hx+6,hy+10); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle=T.dark; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(hx+8,hy+5); ctx.lineTo(hx+26,hy+6); ctx.stroke();
+  // 角、鬃
+  ctx.strokeStyle="#ffd24a"; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.moveTo(hx-4,hy-10); ctx.lineTo(hx-16,hy-28); ctx.moveTo(hx+2,hy-11); ctx.lineTo(hx-6,hy-30); ctx.stroke();
+  ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(hx+22,hy+8); ctx.quadraticCurveTo(hx+34,hy+20,hx+44,hy+14); ctx.stroke();
+  ctx.fillStyle="#ffd24a"; for(let i=0;i<3;i++){ ctx.beginPath(); ctx.moveTo(hx-14,hy-4+i*6); ctx.lineTo(hx-28,hy-8+i*7); ctx.lineTo(hx-14,hy+2+i*6); ctx.fill(); }
+  // 眼睛
+  ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(hx+4,hy-3,4.5,0,6.283); ctx.fill();
+  ctx.fillStyle="#111"; ctx.beginPath(); ctx.arc(hx+5,hy-3,2.2,0,6.283); ctx.fill();
+
+  // 兩位划手：前面是第一位（1 或 3），後面是第二位（2 或 4）
+  const [front, back] = T.members;
+  drawRower(x - L*0.36, y-15, front, T, now);
+  drawRower(x - L*0.66, y-15, back, T, now);
+  ctx.restore();
+}
+
+function drawRower(rx, deckY, id, T, now){
+  const isCur = curId()===id && G.phase!=="done";
+  const rowing = isCur && G.phase==="active";
+  const ph = G.rowPhase[id];
+  // 划槳角度：划動時前後擺，平常停在休息位置
+  const a = rowing ? 0.75*Math.sin(ph) : 0.35;
+  // 光暈
+  if(isCur){ ctx.fillStyle="rgba(255,210,74,.35)"; ctx.beginPath(); ctx.arc(rx,deckY-30,26+3*Math.sin(now*6),0,6.283); ctx.fill(); }
+  // 身體
+  const lean = rowing ? 4*Math.sin(ph) : 0;
+  ctx.fillStyle = "#fff3df"; rrect(rx-8+lean*0.5, deckY-26, 16, 24, 6); ctx.fill();
+  ctx.fillStyle = T.color; ctx.fillRect(rx-8+lean*0.5, deckY-26, 16, 6);
+  // 頭 + 頭巾
+  const hx=rx+lean, hy=deckY-36;
+  ctx.fillStyle="#f2c9a0"; ctx.beginPath(); ctx.arc(hx,hy,9,0,6.283); ctx.fill();
+  ctx.fillStyle=T.color; ctx.fillRect(hx-9,hy-7,18,5);
+  ctx.strokeStyle=T.color; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(hx-9,hy-5); ctx.lineTo(hx-18,hy-1+Math.sin(now*8)*2); ctx.stroke();
+  // 槳：pivot 在船舷外側
+  const px=rx+4, py=deckY+2;
+  const dirx=Math.sin(-a), diry=Math.cos(a);
+  const topX=px - dirx*26, topY=py - diry*26;
+  const botX=px + dirx*34, botY=py + diry*34;
+  // 手臂
+  ctx.strokeStyle="#f2c9a0"; ctx.lineWidth=5; ctx.lineCap="round";
+  ctx.beginPath(); ctx.moveTo(hx+2,deckY-22); ctx.lineTo(topX,topY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(hx+2,deckY-18); ctx.lineTo((topX+px)/2,(topY+py)/2); ctx.stroke();
+  // 槳桿
+  ctx.strokeStyle="#7a4a22"; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(topX,topY); ctx.lineTo(botX,botY); ctx.stroke();
+  ctx.strokeStyle="#a86a32"; ctx.lineWidth=9; ctx.beginPath(); ctx.moveTo(px+dirx*22,py+diry*22); ctx.lineTo(botX,botY); ctx.stroke();
+  // 名牌
+  const label = `${id} ${devs[id].name||""}`.trim();
+  tag(label, rx, deckY-62, isCur ? "#ffd24a" : "rgba(0,0,0,.55)", isCur ? "#3a0a10" : "#fff", isCur?15:13);
+}
+
+// ---------------- 火箭 ----------------
+const STARS = Array.from({length:110},()=>({x:Math.random(),y:Math.random(),r:Math.random()*1.6+0.4,p:Math.random()*6}));
+function drawRocketScene(w,h,HUD,now){
+  const bg=ctx.createLinearGradient(0,HUD,0,h); bg.addColorStop(0,"#070b26"); bg.addColorStop(0.7,"#1a2560"); bg.addColorStop(1,"#3a4a8a");
+  ctx.fillStyle=bg; ctx.fillRect(0,HUD,w,h-HUD);
+  for(const s of STARS){ ctx.globalAlpha=0.4+0.6*Math.abs(Math.sin(now*1.3+s.p)); ctx.fillStyle="#fff";
+    ctx.beginPath(); ctx.arc(s.x*w, HUD+s.y*(h-HUD)*0.85, s.r, 0, 6.283); ctx.fill(); }
+  ctx.globalAlpha=1;
+  // 月亮
+  ctx.fillStyle="#fff3c4"; ctx.beginPath(); ctx.arc(w*0.86, HUD+40, 20, 0, 6.283); ctx.fill();
+  ctx.fillStyle="rgba(200,190,140,.6)"; ctx.beginPath(); ctx.arc(w*0.86-7,HUD+36,5,0,6.283); ctx.arc(w*0.86+8,HUD+46,4,0,6.283); ctx.fill();
+  // 地面
+  const groundY=h-40;
+  ctx.fillStyle="#2b3a2a"; ctx.fillRect(0,groundY,w,h-groundY);
+  ctx.fillStyle="#3f5440"; ctx.fillRect(0,groundY,w,6);
+
+  const RH = Math.max(56, Math.min(100, (h-HUD)*0.15));
+  const topBase = HUD + 28 + RH;  // 抵達終點時火箭底部位置（終點線拉高）
+  const yOf = (p)=> groundY - (groundY-topBase)*(p/CFG.goal);
+  // 高度格線
+  for(let i=0;i<=CFG.goal;i++){
+    const y=yOf(i);
+    ctx.strokeStyle= i===CFG.goal ? "rgba(255,210,74,.8)" : "rgba(255,255,255,.12)"; ctx.lineWidth=i===CFG.goal?3:1.5;
+    ctx.setLineDash(i===CFG.goal?[]:[6,8]); ctx.beginPath(); ctx.moveTo(60,y); ctx.lineTo(w-60,y); ctx.stroke(); ctx.setLineDash([]);
+    tag(String(i), 34, y, "rgba(255,255,255,.12)", "#fff", 12);
+    tag(String(i), w-34, y, "rgba(255,255,255,.12)", "#fff", 12);
+  }
+  tag("終點", w*0.5, yOf(CFG.goal), "#ffd24a", "#3a0a10", 15);
+
+  const xs={A:w*0.33, B:w*0.67};
+  // 發射台
+  for(const k of ["A","B"]){ ctx.fillStyle="#555b6e"; ctx.fillRect(xs[k]-50,groundY-8,100,8); }
+  for(const k of ["A","B"]){
+    const id=curId();
+    const firing = TEAM_OF[id]===k && G.phase==="active";
+    const flame = firing ? 20 + Math.min(1.4, G.curFlow/CFG.ref)*RH*0.55 : (G.phase==="move" && TEAM_OF[id]===k ? RH*0.4 : 0);
+    let base = yOf(G.disp[k]);
+    const shake = firing ? Math.sin(now*60)*Math.min(3, G.curFlow/CFG.ref*1.5) : 0;
+    drawRocket(xs[k]+shake, base, RH, k, flame, now);
+  }
+  // 煙
+  for(const p of G.puffs){ const base=yOf(G.disp[p.team]);
+    ctx.globalAlpha=Math.max(0,p.life*0.6); ctx.fillStyle="#cfd6e6";
+    ctx.beginPath(); ctx.arc(xs[p.team]+p.x, base+20+p.y, p.r, 0, 6.283); ctx.fill(); }
+  ctx.globalAlpha=1;
+}
+
+function drawRocket(cx, baseY, H, k, flame, now){
+  const T=TEAMS[k], W=H*0.36;
+  // 火焰
+  if(flame>0){
+    const f = flame*(0.85+0.15*Math.sin(now*40));
+    const g1=ctx.createLinearGradient(0,baseY,0,baseY+f);
+    g1.addColorStop(0,"#fff6c0"); g1.addColorStop(0.4,"#ffb030"); g1.addColorStop(1,"rgba(255,80,30,0)");
+    ctx.fillStyle=g1; ctx.beginPath(); ctx.moveTo(cx-W*0.32,baseY); ctx.quadraticCurveTo(cx,baseY+f*1.1,cx+W*0.32,baseY); ctx.fill();
+    ctx.fillStyle="rgba(255,255,255,.85)"; ctx.beginPath(); ctx.moveTo(cx-W*0.14,baseY); ctx.quadraticCurveTo(cx,baseY+f*0.5,cx+W*0.14,baseY); ctx.fill();
+  }
+  // 尾翼
+  ctx.fillStyle=T.color;
+  ctx.beginPath(); ctx.moveTo(cx-W/2,baseY-H*0.32); ctx.lineTo(cx-W*0.95,baseY+4); ctx.lineTo(cx-W/2,baseY-4); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx+W/2,baseY-H*0.32); ctx.lineTo(cx+W*0.95,baseY+4); ctx.lineTo(cx+W/2,baseY-4); ctx.fill();
+  // 機身
+  const bodyTop = baseY - H*0.78;
+  const bg=ctx.createLinearGradient(cx-W/2,0,cx+W/2,0); bg.addColorStop(0,"#c9cfdc"); bg.addColorStop(0.45,"#ffffff"); bg.addColorStop(1,"#aab2c4");
+  ctx.fillStyle=bg; rrect(cx-W/2, bodyTop, W, baseY-bodyTop, W*0.2); ctx.fill();
+  ctx.strokeStyle="#7d869c"; ctx.lineWidth=2; ctx.stroke();
+  // 頭錐
+  ctx.fillStyle=T.color; ctx.beginPath(); ctx.moveTo(cx-W/2+1,bodyTop+W*0.1); ctx.quadraticCurveTo(cx-W*0.45,bodyTop-H*0.15,cx,baseY-H);
+  ctx.quadraticCurveTo(cx+W*0.45,bodyTop-H*0.15,cx+W/2-1,bodyTop+W*0.1); ctx.closePath(); ctx.fill();
+  // 腰帶
+  ctx.fillStyle=T.color; ctx.fillRect(cx-W/2, baseY-H*0.16, W, H*0.06);
+  // 兩個窗：上面是第一位，下面是第二位
+  const [m1,m2]=T.members;
+  const win = (id, wy, ly)=>{
+    const isCur = curId()===id && G.phase!=="done";
+    const r=W*0.27;
+    if(isCur){ ctx.fillStyle="rgba(255,210,74,.45)"; ctx.beginPath(); ctx.arc(cx,wy,r+7+2*Math.sin(now*6),0,6.283); ctx.fill(); }
+    ctx.fillStyle="#7d869c"; ctx.beginPath(); ctx.arc(cx,wy,r+3,0,6.283); ctx.fill();
+    ctx.fillStyle=isCur?"#ffe28a":"#8fd0ff"; ctx.beginPath(); ctx.arc(cx,wy,r,0,6.283); ctx.fill();
+    text(String(id), cx, wy+1, r*1.2, isCur?"#3a0a10":"#1d3a6a");
+    const label=devs[id].name || `${id}號`;
+    const side = k==="A" ? -1 : 1;
+    ctx.font=`900 14px ${FONT}`; const lw=ctx.measureText(label).width+16;
+    const lx = cx + side*(W*0.6+22+lw/2);
+    ctx.strokeStyle="rgba(255,255,255,.35)"; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(cx+side*(r+3),wy); ctx.lineTo(lx-side*lw/2,ly); ctx.stroke();
+    tag(label, lx, ly, isCur?"#ffd24a":"rgba(0,0,0,.6)", isCur?"#3a0a10":"#fff", isCur?15:13);
+  };
+  // 名牌上下錯開，火箭小的時候也不會疊在一起
+  const w1=bodyTop + H*0.16, w2=bodyTop + H*0.42, mid=(w1+w2)/2;
+  win(m1, w1, Math.min(w1, mid-15));
+  win(m2, w2, Math.max(w2, mid+15));
+}
+
+// =====================================================================
+//  鍵盤模擬
+// =====================================================================
+const held = {};
+addEventListener("keydown", e=>{
+  if(e.target.tagName==="INPUT") return;
+  if(screen==="setup" && /^Digit[1-4]$/.test(e.code)){ held[+e.code.slice(5)]=true; e.preventDefault(); }
+  if(screen==="game" && e.code==="Space"){ held.space=true; e.preventDefault(); }
+});
+addEventListener("keyup", e=>{
+  if(/^Digit[1-4]$/.test(e.code)) held[+e.code.slice(5)]=false;
+  if(e.code==="Space"){ held.space=false; if(screen==="game") e.preventDefault(); }
+});
+// 按完按鈕就移開焦點，避免空白鍵（模擬吸氣）意外觸發按鈕
+document.addEventListener("click", e=>{ const b=e.target.closest("button"); if(b) b.blur(); });
+function updateSim(dt){
+  const RAMP=90, DECAY=260, KMAX=CFG.ref*3;
+  for(const id of [1,2,3,4]){
+    const d=devs[id];
+    const on = (screen==="setup" && held[id]) || (screen==="game" && G && held.space && curId()===id);
+    d.sim = on ? Math.min(KMAX, d.sim + RAMP*dt) : Math.max(0, d.sim - DECAY*dt);
+  }
+}
+
+// =====================================================================
+//  主迴圈與按鈕
+// =====================================================================
+let last=performance.now()/1000;
+function loop(){
+  const now=performance.now()/1000, dt=Math.min(0.1, now-last); last=now;
+  updateSim(dt);
+  updateChips(now);
+  if(screen==="setup") updateSetupMeters(now);
+  if(screen==="game") update(dt, now);
+  if(screen!=="setup"){ render(now); updateTurnChips(); }
+  requestAnimationFrame(loop);
+}
+
+buildSlots(); loadCfgUI(); updateConnNote();
+if(CLOUD) $("hubLink").classList.remove("hide");
+if(!supported()) toast("這個瀏覽器不支援 Web Serial，請用 Chrome 或 Edge 開啟（仍可用鍵盤試玩）");
+$("cfgStrict").onchange = readCfgUI; $("cfgWin").onchange = readCfgUI;
+document.querySelectorAll(".cfg input[type=number]").forEach(i=>i.onchange=readCfgUI);
+$("startInhale").onclick = ()=>newGame("inhale");
+$("startExhale").onclick = ()=>newGame("exhale");
+$("gBack").onclick = ()=>{ screen="setup"; G=null; $("gameBar").classList.add("hide"); $("setup").classList.remove("hide"); };
+$("gSkip").onclick = ()=>{ if(G && (G.phase==="wait"||G.phase==="active"||G.phase==="intro")) finishTurn(true); };
+$("gRestart").onclick = ()=>{ if(G) newGame(G.mode); };
+$("rNext").onclick = (e)=>newGame(e.currentTarget.dataset.mode);
+$("rAgain").onclick = (e)=>newGame(e.currentTarget.dataset.mode);
+$("rCsv").onclick = exportCSV;
+$("rSetup").onclick = ()=>{ screen="setup"; G=null; $("result").classList.add("hide"); $("setup").classList.remove("hide"); };
+resize(); loop();
+</script>
+</body>
+</html>
