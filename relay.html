@@ -177,7 +177,7 @@
               <option value="avg">每次最大氣流平均，大者勝（建議）</option>
               <option value="sum">每次最大氣流加總，大者勝</option>
             </select></label>
-            <label class="ck"><input type="checkbox" id="cfgStrict"> 嚴格判斷方向（吸氣輪只算吸氣、吹氣輪只算吹氣）</label>
+            <label class="ck"><input type="checkbox" id="cfgStrict"> 嚴格判斷方向（預設關閉：不管吸或吹都算；打勾後吸氣輪只算吸氣、吹氣輪只算吹氣）</label>
           </div>
         </details>
       </div>
@@ -217,13 +217,14 @@ import { analyze, parseFFTLine } from "./breath_algorithm.js";
 // =====================================================================
 //  設定
 // =====================================================================
-const DEFAULT_CFG = { dur:5, goal:10, ref:50, minAdv:0.3, maxAdv:3, onset:12, strict:true, smooth:0.25, hold:0.4, win:"avg", winVer:2 };
+const DEFAULT_CFG = { dur:5, goal:10, ref:50, minAdv:0.3, maxAdv:3, onset:12, strict:false, strictVer:2, smooth:0.25, hold:0.4, win:"avg", winVer:2 };
 const store = {
   get(k,def){ try{ const v=localStorage.getItem("relay_"+k); return v==null?def:JSON.parse(v); }catch{ return def; } },
   set(k,v){ try{ localStorage.setItem("relay_"+k, JSON.stringify(v)); }catch{} },
 };
 const _savedCfg = store.get("cfg", {}) || {};
 if(_savedCfg.winVer!==2){ _savedCfg.win="avg"; _savedCfg.winVer=2; }   // 舊設定一律改成「平均」
+if(_savedCfg.strictVer!==2){ _savedCfg.strict=false; _savedCfg.strictVer=2; }   // 預設不區分吸氣/吐氣
 const CFG = Object.assign({}, DEFAULT_CFG, _savedCfg);
 // ---------- 雲端紀錄（只有放在網站上、用 http(s) 開啟時才上傳；本機雙擊開啟不上傳） ----------
 const CLOUD = /^https?:$/.test(location.protocol);
@@ -533,7 +534,7 @@ function readCfgUI(){
   CFG.minAdv=num("cfgMin",0.3,0,3); CFG.maxAdv=num("cfgMax",3,0.5,10); CFG.onset=num("cfgOnset",12,1,100);
   CFG.smooth=num("cfgSmooth",0.25,0,2); CFG.hold=num("cfgHold",0.4,0,3); CFG.win = $("cfgWin").value==="sum" ? "sum" : "avg"; CFG.winVer=2;
   if(CFG.maxAdv<CFG.minAdv) CFG.maxAdv=CFG.minAdv;
-  CFG.strict=$("cfgStrict").checked; store.set("cfg",CFG); loadCfgUI();
+  CFG.strict=$("cfgStrict").checked; CFG.strictVer=2; store.set("cfg",CFG); loadCfgUI();
 }
 
 let toastTimer=null;
